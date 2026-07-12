@@ -1,0 +1,25 @@
+# Weekly Senate EFD refresh (Step 12). Needs a display server: EFD's
+# anti-bot layer blocks headless Chrome, so we run HEADED Chrome under
+# xvfb (virtual display) — the trick that makes Selenium work in CI.
+name: weekly-congress
+on:
+  schedule:
+    - cron: "0 9 * * 0"   # Sundays 09:00 UTC
+  workflow_dispatch: {}
+jobs:
+  congress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip,
+               cache-dependency-path: backend/requirements.txt}
+      - run: pip install -r backend/requirements.txt
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: refresh senate EFD (headed Chrome under xvfb)
+        working-directory: backend
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: xvfb-run -a python scripts/backfill_congress.py --engine selenium --years 1

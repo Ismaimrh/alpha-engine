@@ -1,0 +1,43 @@
+# Pinned to latest stable resolved set as of 2026-07-08 (Python 3.12).
+# Amendment v3.1: spec's original pins were stale (yfinance 0.2.40 was a
+# known pipeline-breakage risk). Refreshed per human decision; see CLAUDE.md.
+# Coherence verified: ta+pandas3+numpy2 RSI/MACD smoke test, lightgbm+sklearn
+# TimeSeriesSplit round-trip, and the spec's Step 1 import check all pass.
+
+# Data
+yfinance==1.5.1
+pandas==3.0.3
+numpy==2.5.1
+pyarrow==24.0.0  # parquet cache in data/raw/ (added Step 5)
+
+# ML
+lightgbm==4.6.0
+scikit-learn==1.9.0
+
+# Backend / API
+fastapi==0.139.0
+uvicorn[standard]==0.51.0
+pydantic==2.13.4
+email-validator==2.3.0  # pydantic EmailStr (subscribe endpoint, Step 9)
+
+# Database
+supabase==2.31.0
+
+# Scraping / parsing (SEC EDGAR, Congress disclosures)
+requests==2.34.2
+beautifulsoup4==4.15.0
+lxml==6.1.1
+
+# Utilities
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2  # spec §Tech Stack (secrets); missing from spec's own pin list
+ta==0.11.0            # latest available release; verified against pandas 3.0
+
+# LLM
+anthropic==0.116.0
+
+# Testing
+pytest==9.1.1
+
+# EFD anti-bot fallback (Plan B congress loader, Tier 2)
+selenium==4.45.0

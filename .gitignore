@@ -1,0 +1,30 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Data & outputs (regenerable, large)
+data/
+reports/
+
+# Notebooks
+notebooks/.ipynb_checkpoints/
+
+# Frontend (populated in Step 11)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

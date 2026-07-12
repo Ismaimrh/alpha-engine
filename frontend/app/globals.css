@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-void text-body;
+}
+
+::selection {
+  background: #5b7cff;
+  color: #0a0d0c;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { @apply rounded bg-rule; }
+
+@layer components {
+  .label-2xs { @apply text-2xs uppercase tracking-[0.15em] text-muted; }
+  .skeleton { @apply animate-pulse rounded bg-panel2; }
+  .tab-btn { @apply px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
