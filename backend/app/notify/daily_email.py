@@ -69,11 +69,13 @@ def render_email(date: str, picks: list[dict], api_url: str) -> tuple[str, str]:
 
 
 def send_batch(subscribers: list[str], subject: str, html_template: str,
-               api_url: str) -> dict:
+               api_url: str, force_dry: bool = False) -> dict:
     """Send one email per subscriber with a personal unsubscribe link.
-    Without RESEND_API_KEY: dry run (log only)."""
+    Dry run when force_dry=True or RESEND_API_KEY is absent. (force_dry
+    exists because env-popping is unreliable: config.load_dotenv() can
+    restore the key after a pop — learned in production.)"""
     key = os.getenv("RESEND_API_KEY")
-    sent, failed, dry = 0, 0, key is None
+    sent, failed, dry = 0, 0, force_dry or key is None
     for email in subscribers:
         link = (f"{api_url}/api/unsubscribe?email={email}"
                 f"&sig={unsubscribe_sig(email)}")

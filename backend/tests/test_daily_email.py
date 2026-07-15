@@ -60,3 +60,12 @@ def test_winsorized_predicted_return_rank_invariant():
     clipped = alpha.clip(-ALPHA_CLIP, ALPHA_CLIP)
     assert clipped["sndk"] == 3.0 and clipped["axon"] == 1.25
     assert list(alpha.rank()) == list(clipped.rank())  # ranking unchanged
+
+def test_force_dry_beats_present_key(monkeypatch, capsys):
+    """Regression: --dry-run sent a real email because load_dotenv restored
+    the popped key. force_dry must win over an existing key."""
+    monkeypatch.setenv("RESEND_API_KEY", "real-key")
+    _, html = render_email("2026-07-14", PICKS, "http://api")
+    result = send_batch(["a@x.com"], "s", html, "http://api", force_dry=True)
+    assert result["dry_run"] is True and result["sent"] == 1
+    assert "[dry-run]" in capsys.readouterr().out
