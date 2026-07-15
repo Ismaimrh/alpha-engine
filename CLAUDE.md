@@ -147,4 +147,10 @@ plus the amendments listed below. Read it fully before acting.
       railway.json + Procfile, DEPLOY.md runbook (~$1-2/mo). Awaiting human:
       GitHub push, Railway, Vercel, secrets, manual workflow smoke tests)
 - [ ] Step 13 — Paper trade
-- [ ] Step 14 — Launch
+- [~] Step 14 — Launch (code done: daily top-10 email via Resend adapter w/ dry-run
+      fallback, signed unsubscribe endpoint (HMAC from service key), wired as soft
+      nightly step; winsorize ALPHA_CLIP=3 applied to predicted_return only
+      (rank-invariant, Gates 2/3 untouched — SNDK 5.2σ decision closed); Gate 5
+      checklist in DEPLOY.md. DATA-TRUST CHECK CLOSED: human verified charts —
+      CIEN +449% 1y and SNDK ~40x are REAL (NAND supercycle), no adjustment bug.
+      Awaiting human: deploy leg confirmations + Resend signup + Gate 5 checklist)

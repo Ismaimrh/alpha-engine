@@ -74,7 +74,9 @@ def main() -> int:
         steps.append(("theses",
                       script("generate_theses.py", "--top-n", "10",
                              "--max-cost", "0.25")))
+    steps.append(("outcomes", script("resolve_outcomes.py")))
     steps.append(("performance", script("export_performance.py")))
+    steps.append(("email", script("send_daily_email.py")))
 
     results = {name: run_step(name, fn) for name, fn in steps}
 

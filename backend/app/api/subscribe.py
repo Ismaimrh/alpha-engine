@@ -71,3 +71,31 @@ def fetch_stats() -> dict:
 @router.get("/api/stats", response_model=StatsResponse)
 def get_stats():
     return StatsResponse(**fetch_stats())
+
+
+# ------------------------------------------------------- /api/unsubscribe
+
+@router.get("/api/unsubscribe")
+def unsubscribe(email: str, sig: str):
+    """Signed one-click unsubscribe (link embedded in every daily email)."""
+    from app.notify.daily_email import unsubscribe_sig
+
+    if not hmac_compare(sig, unsubscribe_sig(email)):
+        raise HTTPException(403, "invalid unsubscribe link")
+    try:
+        remove_subscriber(email)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(503, "unsubscribe storage unavailable") from exc
+    return {"status": "unsubscribed", "email": email}
+
+
+def hmac_compare(a: str, b: str) -> bool:
+    import hmac as _hmac
+
+    return _hmac.compare_digest(a, b)
+
+
+def remove_subscriber(email: str) -> None:
+    from app.utils.db import supabase
+
+    supabase.table("subscribers").delete().eq("email", email).execute()

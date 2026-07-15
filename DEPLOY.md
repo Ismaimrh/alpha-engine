@@ -5,10 +5,15 @@ the Next.js frontend, **GitHub Actions** runs the nightly pipeline and the
 weekly Senate EFD refresh (headed Chrome under xvfb). Supabase stays as-is.
 
 ## 0. Push to GitHub (prerequisite for everything)
+The commit message is a label for humans — any text is fine. What matters:
+push the WHOLE project root (backend/, frontend/, .github/, database/), and
+verify no secrets are staged before committing.
 ```bash
 cd <project root>
-git init && git add -A && git commit -m "phase 3 complete"  # if not already
-gh repo create alpha-engine --private --source . --push     # or via web UI
+git init && git add -A
+git status | grep -E "\.env|data/" && echo "STOP: secrets/data staged" || echo "clean"
+git commit -m "Alpha Engine MVP: pipeline, factors, backtest, API, frontend, schedulers"
+gh repo create alpha-engine --private --source . --push   # or create on github.com + git remote add + push
 ```
 
 ## 1. Backend → Railway (~10 min)
@@ -16,7 +21,7 @@ gh repo create alpha-engine --private --source . --push     # or via web UI
 2. Settings → **Root Directory: `backend`** (railway.json is read from there;
    it sets the uvicorn start command and the /health healthcheck).
 3. Variables → add:
-   - `SUPABASE_URL`, `SUPABASE_KEY` (same values as your .env)
+   - `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (same values as your .env)
    - `ANTHROPIC_API_KEY`
    - `SEC_USER_AGENT`
    - `FRONTEND_ORIGIN` = your Vercel URL (add after step 2; redeploy)
@@ -34,7 +39,7 @@ gh repo create alpha-engine --private --source . --push     # or via web UI
 
 ## 3. Schedulers → GitHub Actions (~5 min)
 Repo → Settings → Secrets and variables → Actions → add:
-`SUPABASE_URL`, `SUPABASE_KEY`, `ANTHROPIC_API_KEY`, `SEC_USER_AGENT`.
+`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANTHROPIC_API_KEY`, `SEC_USER_AGENT`.
 
 Workflows already in the repo:
 - `nightly.yml` — 01:30 UTC Tue–Sat: prices (1.2y window) → fundamentals
@@ -63,3 +68,21 @@ Anthropic ~$0.05/day of theses → **≈ $1–2/month total**, inside the $0–5
 - Subscriber email *sending* (list collection works; sending is Step 14).
 - yfinance rate limits on Actions runners: if the prices step starts
   flaking, add a retry or move price fetch to a Railway cron.
+
+## 5. Launch (Step 14) — daily email
+1. resend.com → free account → API key → add GitHub secret `RESEND_API_KEY`.
+   Optional secrets: `SITE_URL` (Vercel URL), `API_URL` (Railway URL),
+   `EMAIL_FROM` (defaults to Resend's onboarding sender until you verify a domain).
+2. Without RESEND_API_KEY the nightly email step DRY-RUNS (logs, no send) —
+   the pipeline stays green either way.
+3. Test: `python scripts/send_daily_email.py --dry-run` locally, then subscribe
+   yourself on the site and trigger the nightly workflow manually.
+
+## GATE 5 — launch checklist
+- [ ] Railway /api/stats returns live data (DB wiring proven)
+- [ ] Vercel site shows a data date that advances every trading day
+- [ ] Nightly + weekly workflows green on schedule (not just manual)
+- [ ] Subscribed with a real address; received the daily email; unsubscribe link works
+- [ ] UptimeRobot (or similar) pinging /health
+- [ ] Supabase backup: weekly pg_dump or scheduled export
+- [ ] paper_scoreboard.py reports PENDING (accruing) — Gate 4 verdict ~Sep

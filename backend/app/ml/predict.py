@@ -35,6 +35,9 @@ from app.ml.train import FEATURES, build_dataset, train_final_model
 
 CHAMPION_VERSION = "champion-momentum-v1"
 TOP_N = 50
+ALPHA_CLIP = 3.0  # winsorize for predicted_return only (SNDK 5.2σ decision:
+                  # rankings/alpha stay raw; clip is monotonic so Gates 2/3
+                  # and the top-N book are unaffected)
 HORIZON_LABEL = "30d"  # schema column name; actual horizon is 21 trading days
 
 
@@ -128,7 +131,8 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
     champ_alpha = today_frame["momentum_composite"].astype(float)
     slope = calibrate_slope(dataset)
     champ_rows = build_prediction_rows(
-        latest, champ_alpha, slope * champ_alpha, CHAMPION_VERSION, top_n
+        latest, champ_alpha, slope * champ_alpha.clip(-ALPHA_CLIP, ALPHA_CLIP),
+        CHAMPION_VERSION, top_n
     )
 
     # Challenger
