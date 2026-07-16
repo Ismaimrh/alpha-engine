@@ -39,7 +39,7 @@ from app.backtest.metrics import (  # noqa: E402
 from app.factors.backfill_history import _fetch_all  # noqa: E402
 
 FACTORS = ["momentum_composite", "valuation_composite",
-           "insider_congress_composite"]
+           "insider_congress_composite", "insider_v2"]
 MIN_DAYS_FOR_VERDICT = 60
 IC_THRESHOLD = 0.02
 T_THRESHOLD = 2.0

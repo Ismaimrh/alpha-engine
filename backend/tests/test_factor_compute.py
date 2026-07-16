@@ -69,6 +69,7 @@ def test_shape_and_columns(scores):
     assert set(scores.columns) == {
         "momentum_composite", "valuation_composite",
         "quality_composite", "insider_congress_composite",
+        "insider_v2",  # candidate column (research cycle 1)
     }
 
 
@@ -137,3 +138,73 @@ def test_duplicated_mcap_index_does_not_crash():
     )
     assert result.index.is_unique
     assert result["insider_congress_composite"].notna().all()
+
+
+# ------------------------------------------------- insider v2 (candidate)
+
+def _v2_txns(rows):
+    return pd.DataFrame(rows, columns=["transaction_date", "filing_date",
+                                       "insider_name", "transaction_code",
+                                       "total_value"])
+
+
+def test_v2_ignores_sells_entirely():
+    from app.factors.insider_congressional.factors import insider_buy_signal_v2
+
+    only_sells = _v2_txns([
+        ("2026-06-01", "2026-06-03", "Alice CEO", "S", 50_000_000),
+        ("2026-06-10", "2026-06-11", "Bob CFO", "S", 80_000_000),
+    ])
+    assert insider_buy_signal_v2(only_sells, AS_OF, 10e9) == 0.0
+
+    with_buy = _v2_txns([
+        ("2026-06-01", "2026-06-03", "Alice CEO", "S", 50_000_000),
+        ("2026-06-10", "2026-06-11", "Bob CFO", "P", 1_000_000),
+    ])
+    assert insider_buy_signal_v2(with_buy, AS_OF, 10e9) > 0.0
+
+
+def test_v2_breadth_beats_single_whale():
+    from app.factors.insider_congressional.factors import insider_buy_signal_v2
+
+    whale = _v2_txns([("2026-06-01", "2026-06-03", "Alice CEO", "P", 3_000_000)])
+    trio = _v2_txns([
+        ("2026-06-01", "2026-06-03", "Alice CEO", "P", 1_000_000),
+        ("2026-06-05", "2026-06-07", "Bob CFO", "P", 1_000_000),
+        ("2026-06-09", "2026-06-11", "Carol COO", "P", 1_000_000),
+    ])
+    # same total dollars, three distinct buyers > one whale
+    assert (insider_buy_signal_v2(trio, AS_OF, 10e9)
+            > insider_buy_signal_v2(whale, AS_OF, 10e9))
+
+
+def test_v2_log_scaling_tames_outliers():
+    from app.factors.insider_congressional.factors import insider_buy_signal_v2
+
+    small = _v2_txns([("2026-06-01", "2026-06-03", "A", "P", 1_000_000)])
+    huge = _v2_txns([("2026-06-01", "2026-06-03", "A", "P", 100_000_000)])
+    s, h = (insider_buy_signal_v2(small, AS_OF, 10e9),
+            insider_buy_signal_v2(huge, AS_OF, 10e9))
+    assert h > s                      # monotonic
+    assert h / s < 100                # but far sublinear (100x $ -> <100x signal)
+
+
+def test_v2_respects_point_in_time_and_180d_window():
+    from app.factors.insider_congressional.factors import insider_buy_signal_v2
+
+    unfiled = _v2_txns([("2026-06-01", "2026-08-01", "A", "P", 1_000_000)])
+    assert insider_buy_signal_v2(unfiled, AS_OF, 10e9) == 0.0  # filed in future
+
+    old = _v2_txns([("2025-10-01", "2025-10-03", "A", "P", 1_000_000)])
+    recent = _v2_txns([("2026-02-01", "2026-02-03", "A", "P", 1_000_000)])
+    assert insider_buy_signal_v2(old, AS_OF, 10e9) == 0.0      # > 180d ago
+    assert insider_buy_signal_v2(recent, AS_OF, 10e9) > 0.0    # inside 180d
+
+
+def test_assemble_emits_insider_v2_column():
+    result = assemble_factor_scores(
+        AS_OF, _price_signals(), _fundamentals(), _mcaps(), _insider(),
+        pd.DataFrame(),
+    )
+    assert "insider_v2" in result.columns
+    assert result["insider_v2"].notna().any()

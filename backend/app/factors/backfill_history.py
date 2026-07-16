@@ -34,10 +34,11 @@ import numpy as np
 import pandas as pd
 
 from app.factors.compute import LOOKBACK_DAYS, assemble_factor_scores, write_factor_scores
+from app.factors.insider_congressional.factors import V2_LOOKBACK_DAYS
 
 # Prefilter window per date: wider than LOOKBACK_DAYS as a safety margin —
 # assemble_factor_scores applies the exact point-in-time 90d window itself.
-PREFILTER_DAYS = LOOKBACK_DAYS + 30
+PREFILTER_DAYS = max(LOOKBACK_DAYS, V2_LOOKBACK_DAYS) + 30  # v2 needs 180d
 # "Whole table" fetch horizon: 100 years (10**6 days overflows date range).
 WHOLE_TABLE_DAYS = 36_500
 

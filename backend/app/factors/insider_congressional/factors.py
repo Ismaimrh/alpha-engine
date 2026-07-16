@@ -161,3 +161,41 @@ class InsiderCongressionalFactor(FactorBase):
                 congress_df, as_of_date, market_cap
             ),
         }
+
+
+# ------------------------------------------------------------- v2 (candidate)
+
+V2_LOOKBACK_DAYS = 180
+
+
+def insider_buy_signal_v2(
+    transactions: pd.DataFrame,
+    as_of_date: date,
+    market_cap: float,
+    lookback_days: int = V2_LOOKBACK_DAYS,
+) -> float:
+    """CANDIDATE signal (post-Gate-2 rework, 2026-07): purchases only.
+
+    Gate 2 autopsy of v1 (IC -0.0039, t=-0.93): 50k sells drowned 3.5k
+    buys; zero-inflation; 21d horizon mismatch. v2, literature-grounded
+    (Lakonishok-Lee 2001; Cohen-Malloy-Pomorski 2012):
+
+      - PURCHASES ONLY — sells are mostly comp/diversification noise.
+      - log1p(buy$/mcap * 1e4) — log-tames whales; the 1e4 scaling puts
+        typical buy intensities into log1p's responsive range.
+      - x (1 + distinct_buyers/2) — conviction breadth: three insiders
+        buying beats one big buy (continuous, not v1's binary x2).
+      - 180d window — insider alpha plays out over months.
+
+    Status: computed as a standalone candidate column; joins nothing until
+    it passes Gate 2 IC on its own. Champion and composite are untouched.
+    """
+    if not np.isfinite(market_cap) or market_cap <= 0:
+        return float(np.nan)
+    window = _point_in_time_window(transactions, as_of_date, lookback_days)
+    buys = window.loc[window["transaction_code"] == "P"]
+    if buys.empty:
+        return 0.0
+    intensity = float(buys["total_value"].sum()) / market_cap
+    breadth = 1.0 + buys["insider_name"].nunique() / 2.0
+    return float(np.log1p(intensity * 1e4) * breadth)

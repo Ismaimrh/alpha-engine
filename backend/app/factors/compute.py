@@ -34,6 +34,8 @@ import pandas as pd
 
 from app.factors.cross_section import zscore
 from app.factors.insider_congressional.factors import (
+    V2_LOOKBACK_DAYS,
+    insider_buy_signal_v2,
     congress_buy_signal,
     insider_buy_signal,
     smart_money_composite,
@@ -233,14 +235,19 @@ def assemble_factor_scores(
                  "estimated_value"]
     )
     raw = {}
+    raw_v2 = {}
     for cid in universe:
         mcap = market_caps.get(cid, np.nan)
+        raw_v2[cid] = insider_buy_signal_v2(
+            ins_by_co.get(cid, empty_ins), as_of, mcap,
+            lookback_days=V2_LOOKBACK_DAYS)
         ins = insider_buy_signal(ins_by_co.get(cid, empty_ins), as_of, mcap,
                                  lookback_days=LOOKBACK_DAYS)
         con = congress_buy_signal(con_by_co.get(cid, empty_con), as_of, mcap,
                                   lookback_days=LOOKBACK_DAYS)
         raw[cid] = smart_money_composite(ins, con)
     out["insider_congress_composite"] = zscore(pd.Series(raw))
+    out["insider_v2"] = zscore(pd.Series(raw_v2))  # candidate (Gate 2 pending)
 
     return out
 
@@ -274,7 +281,9 @@ def run_daily_factors(as_of: date | None = None) -> dict:
     prices = fetch_price_signals(trading_date)
     fundamentals = fetch_fundamental_metrics(as_of)
     mcaps = fetch_market_caps()
-    insider = _fetch_transactions("insider_transactions", as_of, LOOKBACK_DAYS)
+    # v2 needs the wider window; v1 re-filters to 90d internally
+    insider = _fetch_transactions("insider_transactions", as_of,
+                                  max(LOOKBACK_DAYS, V2_LOOKBACK_DAYS))
     congress = _fetch_transactions("congress_transactions", as_of, LOOKBACK_DAYS)
 
     scores = assemble_factor_scores(
