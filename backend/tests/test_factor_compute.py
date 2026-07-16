@@ -70,6 +70,7 @@ def test_shape_and_columns(scores):
         "momentum_composite", "valuation_composite",
         "quality_composite", "insider_congress_composite",
         "insider_v2",  # candidate column (research cycle 1)
+        "momentum_sector_rel", "reversal_21d", "low_vol",  # batch 2
     }
 
 
@@ -208,3 +209,60 @@ def test_assemble_emits_insider_v2_column():
     )
     assert "insider_v2" in result.columns
     assert result["insider_v2"].notna().any()
+
+
+# ------------------------------------------- research batch 2 candidates
+
+def _batch2_inputs():
+    sectors = pd.Series({"co-momo": "Tech", "co-value": "Tech",
+                         "co-insider": "Health", "co-filtered": "Health"})
+    ret21 = pd.Series({"co-momo": 0.30, "co-value": 0.05,
+                       "co-insider": -0.15, "co-filtered": 0.01})
+    vol63 = pd.Series({"co-momo": 0.045, "co-value": 0.015,
+                       "co-insider": 0.030, "co-filtered": 0.010})
+    return sectors, ret21, vol63
+
+
+def _assemble_batch2():
+    sectors, ret21, vol63 = _batch2_inputs()
+    return assemble_factor_scores(
+        AS_OF, _price_signals(), _fundamentals(), _mcaps(), _insider(),
+        pd.DataFrame(), sectors=sectors, trailing_ret_21d=ret21,
+        realized_vol_63d=vol63,
+    )
+
+
+def test_batch2_columns_emitted_and_none_inputs_degrade():
+    scores = _assemble_batch2()
+    for col in ("momentum_sector_rel", "reversal_21d", "low_vol"):
+        assert col in scores.columns
+        assert scores[col].notna().any()
+    # None inputs -> NaN columns, no crash (old call sites keep working)
+    bare = assemble_factor_scores(
+        AS_OF, _price_signals(), _fundamentals(), _mcaps(), _insider(),
+        pd.DataFrame(),
+    )
+    for col in ("momentum_sector_rel", "reversal_21d", "low_vol"):
+        assert bare[col].isna().all()
+
+
+def test_reversal_ranks_the_biggest_loser_highest():
+    scores = _assemble_batch2()
+    assert scores["reversal_21d"].idxmax() == "co-insider"   # -15% loser
+    assert scores["reversal_21d"].idxmin() == "co-momo"      # +30% winner
+
+
+def test_low_vol_ranks_the_calmest_highest():
+    scores = _assemble_batch2()
+    assert scores["low_vol"].idxmax() == "co-filtered"       # vol 1.0%
+    assert scores["low_vol"].idxmin() == "co-momo"           # vol 4.5%
+
+
+def test_sector_relative_uses_global_fallback_for_tiny_sectors():
+    # 2-name sectors (<5) must fall back to the GLOBAL momentum z
+    scores = _assemble_batch2()
+    pd.testing.assert_series_equal(
+        scores["momentum_sector_rel"].sort_index(),
+        scores["momentum_composite"].sort_index(),
+        check_names=False,
+    )

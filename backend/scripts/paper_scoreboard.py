@@ -59,9 +59,11 @@ def main() -> int:
     print("-" * 72)
 
     champ = ics.get(CHAMPION_VERSION, pd.Series(dtype=float))
-    chall = ics.get(CHALLENGER_VERSION, pd.Series(dtype=float))
-    verdict = promotion_verdict(champ, chall)
-    print(f"  promotion check: {verdict}")
+    for model, ic in ics.items():
+        if model == CHAMPION_VERSION:
+            continue
+        verdict = promotion_verdict(champ, ic)
+        print(f"  vs {model}: {verdict}")
     print("-" * 72)
 
     s = ic_summary(champ)

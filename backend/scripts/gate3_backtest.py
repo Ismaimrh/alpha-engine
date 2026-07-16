@@ -32,7 +32,7 @@ import pandas as pd  # noqa: E402
 from app.backtest.engine import perf_summary, run_backtest, to_wide_closes  # noqa: E402
 from app.factors.backfill_history import _fetch_all  # noqa: E402
 
-SCORE_COL = "momentum_composite"
+DEFAULT_SCORE_COL = "momentum_composite"
 
 
 def main() -> int:
@@ -40,6 +40,9 @@ def main() -> int:
     parser.add_argument("--top-n", type=int, default=50)
     parser.add_argument("--cost-bps", type=float, default=10.0)
     parser.add_argument("--rebalance", type=int, default=21)
+    parser.add_argument("--score-col", default=DEFAULT_SCORE_COL,
+                        help="factor_scores column to trade (e.g. "
+                             "momentum_sector_rel)")
     args = parser.parse_args()
 
     print("Loading close panel ...", flush=True)
@@ -49,15 +52,15 @@ def main() -> int:
     closes = to_wide_closes(closes_long[["date", "company_id", "close"]])
 
     print("Loading factor panel ...", flush=True)
-    scores = _fetch_all("factor_scores", f"id,date,company_id,{SCORE_COL}", "id")
+    scores = _fetch_all("factor_scores", f"id,date,company_id,{args.score_col}", "id")
     scores["date"] = pd.to_datetime(scores["date"]).dt.date
     scores = scores.drop_duplicates(subset=["date", "company_id"])
 
     print("Running backtest ...", flush=True)
-    result = run_backtest(closes, scores, SCORE_COL, top_n=args.top_n,
+    result = run_backtest(closes, scores, args.score_col, top_n=args.top_n,
                           rebalance_every=args.rebalance,
                           cost_bps=args.cost_bps)
-    free = run_backtest(closes, scores, SCORE_COL, top_n=args.top_n,
+    free = run_backtest(closes, scores, args.score_col, top_n=args.top_n,
                         rebalance_every=args.rebalance, cost_bps=0.0)
 
     strat = perf_summary(result["daily_returns"])

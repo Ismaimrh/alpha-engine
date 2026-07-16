@@ -178,10 +178,17 @@ def assemble_factor_scores(
     market_caps: pd.Series,
     insider_df: pd.DataFrame,
     congress_df: pd.DataFrame,
+    sectors: pd.Series | None = None,
+    trailing_ret_21d: pd.Series | None = None,
+    realized_vol_63d: pd.Series | None = None,
 ) -> pd.DataFrame:
-    """Pure cross-sectional assembly. Index: company_id. Columns:
-    momentum_composite, valuation_composite, quality_composite,
-    insider_congress_composite."""
+    """Pure cross-sectional assembly. Index: company_id.
+
+    Live columns: momentum/valuation/quality/insider_congress composites.
+    CANDIDATE columns (research batch 2, own Gate 2 pending, live ranking
+    untouched): momentum_sector_rel, reversal_21d, low_vol — each computed
+    only when its aux input is provided (None -> NaN column), so old call
+    sites degrade gracefully."""
     # Defensive: duplicated indexes (e.g. from pagination bugs upstream)
     # would make .get() return a Series and corrupt cross-sections.
     market_caps = market_caps[~market_caps.index.duplicated(keep="first")]
@@ -249,7 +256,81 @@ def assemble_factor_scores(
     out["insider_congress_composite"] = zscore(pd.Series(raw))
     out["insider_v2"] = zscore(pd.Series(raw_v2))  # candidate (Gate 2 pending)
 
+    # --- Research batch 2 candidates (standalone, Gate 2 pending) ---
+    # momentum_sector_rel: momentum z-scored WITHIN GICS sector — strips the
+    # sector bet out of the signal (targets the SNDK/CIEN-style verticality
+    # concentration). Sectors with <5 names fall back to the global z.
+    if sectors is not None and out["momentum_composite"].notna().any():
+        momo = out["momentum_composite"]
+        sec = sectors.reindex(universe)
+        rel = pd.Series(np.nan, index=universe)
+        for name, group in momo.groupby(sec):
+            rel.loc[group.index] = (zscore(group) if len(group) >= 5
+                                    else momo.loc[group.index])
+        out["momentum_sector_rel"] = rel
+    else:
+        out["momentum_sector_rel"] = np.nan
+
+    # reversal_21d: -1 * trailing 21d return, z-scored — the classic
+    # short-term reversal; negatively correlated with momentum by
+    # construction = diversification candidate.
+    if trailing_ret_21d is not None:
+        out["reversal_21d"] = zscore(-trailing_ret_21d.reindex(universe))
+    else:
+        out["reversal_21d"] = np.nan
+
+    # low_vol: -1 * realized 63d vol, z-scored — low-volatility anomaly.
+    if realized_vol_63d is not None:
+        out["low_vol"] = zscore(-realized_vol_63d.reindex(universe))
+    else:
+        out["low_vol"] = np.nan
+
     return out
+
+
+def fetch_sectors() -> pd.Series:
+    """company_id -> GICS sector (from the universe table)."""
+    from app.utils.db import supabase
+
+    rows, page = [], 0
+    while True:
+        resp = (supabase.table("companies").select("id,sector")
+                .order("id").range(page * 1000, page * 1000 + 999).execute())
+        rows.extend(resp.data)
+        if len(resp.data) < 1000:
+            break
+        page += 1
+    return pd.Series({r["id"]: r["sector"] for r in rows})
+
+
+def fetch_trailing_stats(trading_date: date,
+                         ret_days: int = 21,
+                         vol_days: int = 63) -> tuple[pd.Series, pd.Series]:
+    """(trailing 21d return, realized 63d vol) per company as of
+    trading_date, from the stored close panel."""
+    from app.utils.db import supabase
+
+    start = (trading_date - timedelta(days=int(vol_days * 1.6) + 10)).isoformat()
+    rows, page = [], 0
+    while True:
+        resp = (supabase.table("price_features")
+                .select("date,company_id,close")
+                .gte("date", start).lte("date", trading_date.isoformat())
+                .order("id").range(page * 1000, page * 1000 + 999).execute())
+        rows.extend(resp.data)
+        if len(resp.data) < 1000:
+            break
+        page += 1
+    df = pd.DataFrame(rows).drop_duplicates(subset=["date", "company_id"])
+    if df.empty:
+        return pd.Series(dtype=float), pd.Series(dtype=float)
+    wide = (df.pivot(index="date", columns="company_id", values="close")
+            .sort_index().astype(float))
+    rets = wide.pct_change()
+    ret21 = (wide.iloc[-1] / wide.iloc[-(ret_days + 1)] - 1
+             if len(wide) > ret_days else pd.Series(np.nan, index=wide.columns))
+    vol63 = rets.tail(vol_days).std(ddof=1)
+    return ret21, vol63
 
 
 # -------------------------------------------------------------------- write
@@ -286,8 +367,11 @@ def run_daily_factors(as_of: date | None = None) -> dict:
                                   max(LOOKBACK_DAYS, V2_LOOKBACK_DAYS))
     congress = _fetch_transactions("congress_transactions", as_of, LOOKBACK_DAYS)
 
+    sectors = fetch_sectors()
+    ret21, vol63 = fetch_trailing_stats(trading_date)
     scores = assemble_factor_scores(
-        as_of, prices, fundamentals, mcaps, insider, congress
+        as_of, prices, fundamentals, mcaps, insider, congress,
+        sectors=sectors, trailing_ret_21d=ret21, realized_vol_63d=vol63,
     )
     written = write_factor_scores(scores, trading_date)
     return {

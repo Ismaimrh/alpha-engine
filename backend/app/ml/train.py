@@ -43,6 +43,14 @@ MODEL_VERSION = "lgbm-v1-momentum-insider-valuation"
 FEATURES = [
     "momentum_12_1", "rsi_14", "macd_signal",
     "momentum_composite", "valuation_composite", "insider_congress_composite",
+    "momentum_sector_rel",  # Gate 2 PASS both horizons (0.0317/0.0392)
+    "reversal_21d", "low_vol",  # wrong-signed but |t|>=3: composite NO
+                   # (sign-flip = data snooping), ensemble YES (GBM is
+                   # sign-agnostic; predictive content is what qualifies)
+    "insider_v2",  # Gate 2 near-miss (63d IC 0.0181, t=6.36): not promoted
+                   # to composite (bar is 0.02, no post-hoc goalposts) but
+                   # earns ensemble membership — the GBM weights it, and
+                   # champion/challenger judges the result on realized ICs.
 ]
 
 LGB_PARAMS = dict(

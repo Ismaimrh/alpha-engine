@@ -34,6 +34,10 @@ from app.ml.train import MODEL_VERSION as CHALLENGER_VERSION
 from app.ml.train import FEATURES, build_dataset, train_final_model
 
 CHAMPION_VERSION = "champion-momentum-v1"
+SECTOR_CANDIDATE_VERSION = "cand-sector-momentum-v1"  # Gate 2 pass
+# (2026-07-16: sector_rel beat raw momentum IC at both horizons; per
+# governance it is NOT hot-swapped in — it runs as a tracked model and
+# promotion rides on realized ICs via the Gate 4 machinery.)
 TOP_N = 50
 ALPHA_CLIP = 3.0  # winsorize for predicted_return only (SNDK 5.2σ decision:
                   # rankings/alpha stay raw; clip is monotonic so Gates 2/3
@@ -112,7 +116,8 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
 
     prices = fetch_price_panel()
     composites = ["momentum_composite", "valuation_composite",
-                  "insider_congress_composite"]
+                  "insider_congress_composite", "insider_v2",
+                  "momentum_sector_rel", "reversal_21d", "low_vol"]
     scores = _fetch_all("factor_scores",
                         "id,date,company_id," + ",".join(composites), "id")
     scores["date"] = pd.to_datetime(scores["date"]).dt.date
@@ -135,6 +140,15 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
         CHAMPION_VERSION, top_n
     )
 
+    # Sector-relative candidate (tracked model, Gate 2 pass 2026-07-16)
+    sect_alpha = today_frame["momentum_sector_rel"].astype(float)
+    sect_slope = calibrate_slope(dataset, score_col="momentum_sector_rel")
+    sect_rows = build_prediction_rows(
+        latest, sect_alpha,
+        sect_slope * sect_alpha.clip(-ALPHA_CLIP, ALPHA_CLIP),
+        SECTOR_CANDIDATE_VERSION, top_n,
+    )
+
     # Challenger
     model = train_final_model(dataset)
     chall_pred = pd.Series(
@@ -147,7 +161,7 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
     )
 
     written = 0
-    for rows in (champ_rows, chall_rows):
+    for rows in (champ_rows, sect_rows, chall_rows):
         for i in range(0, len(rows), 500):
             supabase.table("predictions").upsert(
                 rows[i : i + 500],
@@ -160,6 +174,7 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
     return {
         "date": latest.isoformat(),
         "champion_rows": len(champ_rows),
+        "sector_candidate_rows": len(sect_rows),
         "challenger_rows": len(chall_rows),
         "rows_written": written,
         "calibration_slope": round(slope, 6),

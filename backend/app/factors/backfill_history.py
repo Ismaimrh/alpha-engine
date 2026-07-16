@@ -152,6 +152,15 @@ def backfill_factor_history(restart: bool = False,
         first_snapshot = date.fromisoformat(resp.data[0]["as_of_date"])
     mcap_latest = fetch_market_caps()
 
+    # Batch-2 candidate inputs, vectorized once over the whole panel
+    from app.factors.compute import fetch_sectors
+    sectors = fetch_sectors()
+    wide_all = (panel.pivot(index="date", columns="company_id", values="close")
+                .sort_index().astype(float))
+    rets_all = wide_all.pct_change()
+    ret21_all = wide_all / wide_all.shift(21) - 1
+    vol63_all = rets_all.rolling(63, min_periods=40).std(ddof=1)
+
     latest_date = trading_dates[-1]
     closes_latest = (
         panel.loc[panel["date"] == latest_date]
@@ -181,7 +190,14 @@ def backfill_factor_history(restart: bool = False,
             if not congress_all.empty else empty
         )
         funds = fundamentals if (first_snapshot and d >= first_snapshot) else empty
-        scores = assemble_factor_scores(d, signals, funds, mcaps, ins, con)
+        scores = assemble_factor_scores(
+            d, signals, funds, mcaps, ins, con,
+            sectors=sectors,
+            trailing_ret_21d=(ret21_all.loc[d]
+                              if d in ret21_all.index else None),
+            realized_vol_63d=(vol63_all.loc[d]
+                              if d in vol63_all.index else None),
+        )
         rows_written += write_factor_scores(scores, d)
         if n % 20 == 0:
             elapsed = (datetime.now() - started).total_seconds()

@@ -55,3 +55,20 @@ def test_build_rows_shape_and_nan_skipping():
     assert by_id["a"]["model_version"] == CHAMPION_VERSION
     assert by_id["a"]["date"] == "2026-07-08"
     assert by_id["a"]["predicted_return_30d"] == 0.02
+
+
+def test_sector_candidate_version_distinct():
+    from app.ml.predict import (CHAMPION_VERSION, SECTOR_CANDIDATE_VERSION)
+    from app.ml.train import MODEL_VERSION as CHALLENGER_VERSION
+
+    versions = {CHAMPION_VERSION, SECTOR_CANDIDATE_VERSION, CHALLENGER_VERSION}
+    assert len(versions) == 3  # three distinct tracked models
+
+
+def test_calibrate_slope_works_on_alternate_score_col():
+    rng = np.random.default_rng(9)
+    x = rng.normal(size=3000)
+    df = pd.DataFrame({"momentum_sector_rel": x,
+                       "target": 0.008 * x + rng.normal(0, 0.001, 3000)})
+    assert calibrate_slope(df, score_col="momentum_sector_rel") == pytest.approx(
+        0.008, rel=0.05)
