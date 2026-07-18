@@ -184,3 +184,73 @@ def test_picks_rank_change(monkeypatch):
     r = client.get("/api/picks?limit=1")
     assert r.status_code == 200
     assert r.json()["picks"][0]["rank_change"] == 3  # climbed 4 -> 1
+
+
+def test_models_endpoint(monkeypatch):
+    import pandas as pd
+    import app.api.models as models_mod
+    monkeypatch.setattr(picks_mod, "fetch_latest_prediction_date",
+                        lambda mv: "2026-07-16")
+    monkeypatch.setattr(models_mod, "fetch_model_predictions", lambda d: {
+        "champion-momentum-v1": [
+            {"model_version": "champion-momentum-v1", "company_id": "id-1",
+             "alpha_score": 2.0},
+            {"model_version": "champion-momentum-v1", "company_id": "id-2",
+             "alpha_score": 1.0},
+        ],
+        "cand-sector-momentum-v1": [
+            {"model_version": "cand-sector-momentum-v1", "company_id": "id-2",
+             "alpha_score": 1.8},
+            {"model_version": "cand-sector-momentum-v1", "company_id": "id-3",
+             "alpha_score": 0.9},
+        ],
+    })
+    monkeypatch.setattr(picks_mod, "fetch_companies", lambda ids: {
+        "id-1": {"id": "id-1", "ticker": "SNDK", "name": "Sandisk",
+                 "sector": "IT"},
+        "id-2": {"id": "id-2", "ticker": "AXON", "name": "Axon",
+                 "sector": "Industrials"},
+        "id-3": {"id": "id-3", "ticker": "VLO", "name": "Valero",
+                 "sector": "Energy"},
+    })
+    monkeypatch.setattr(models_mod, "fetch_realized_ic_frame",
+                        lambda: pd.DataFrame())  # pre-outcomes world
+    r = client.get("/api/models")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["date"] == "2026-07-16"
+    roles = {m["model_version"]: m["role"] for m in body["models"]}
+    assert roles["champion-momentum-v1"] == "champion"
+    assert roles["cand-sector-momentum-v1"] == "candidate"
+    champ = next(m for m in body["models"]
+                 if m["role"] == "champion")
+    assert champ["top10"][0]["ticker"] == "SNDK"
+    assert champ["realized"] is None            # pending state honest
+    key = "cand-sector-momentum-v1 vs champion-momentum-v1"
+    key2 = "champion-momentum-v1 vs cand-sector-momentum-v1"
+    overlap = body["overlap_top50"].get(key) or body["overlap_top50"].get(key2)
+    assert overlap == 0.5                       # id-2 shared of 2
+    assert "REALIZED" in body["note"]
+
+
+def test_sectors_endpoint(monkeypatch):
+    import app.api.rankings as rankings_mod
+    monkeypatch.setattr(picks_mod, "fetch_latest_prediction_date",
+                        lambda mv: "2026-07-16")
+    monkeypatch.setattr(rankings_mod, "fetch_all_predictions", lambda d, mv: [
+        {"company_id": "id-1", "alpha_score": 2.0},
+        {"company_id": "id-2", "alpha_score": 1.0},
+        {"company_id": "id-3", "alpha_score": -0.5},
+    ])
+    monkeypatch.setattr(picks_mod, "fetch_companies", lambda ids: {
+        "id-1": {"id": "id-1", "ticker": "SNDK", "name": "S", "sector": "IT"},
+        "id-2": {"id": "id-2", "ticker": "MSFT", "name": "M", "sector": "IT"},
+        "id-3": {"id": "id-3", "ticker": "VLO", "name": "V", "sector": "Energy"},
+    })
+    r = client.get("/api/sectors")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["sectors"][0]["sector"] == "IT"        # mean 1.5 first
+    assert body["sectors"][0]["n"] == 2
+    assert body["sectors"][0]["top_ticker"] == "SNDK"
+    assert body["sectors"][1]["mean_alpha"] == -0.5

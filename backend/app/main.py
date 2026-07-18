@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.factors import router as factors_router
 from app.api.picks import router as picks_router
 from app.api.subscribe import router as subscribe_router
+from app.api.models import router as models_router
 from app.api.rankings import router as rankings_router
 from app.api.theses import router as theses_router
 
@@ -41,6 +42,7 @@ app.include_router(factors_router)
 app.include_router(subscribe_router)
 app.include_router(theses_router)
 app.include_router(rankings_router)
+app.include_router(models_router)
 
 
 @app.get("/health")
