@@ -24,8 +24,10 @@ RESEND_URL = "https://api.resend.com/emails"
 SITE_URL = os.getenv("SITE_URL", "https://alpha-engine.vercel.app")
 EMAIL_FROM = os.getenv("EMAIL_FROM", "Alpha Engine <onboarding@resend.dev>")
 
-DISCLAIMER = ("Backtested signals, not financial advice. "
-              "Past performance does not guarantee future results.")
+DISCLAIMER = ("Backtested signals, not financial advice. Past performance "
+              "does not guarantee future results. Expected returns are "
+              "model-implied estimates (in-sample calibrated, ±3σ capped), "
+              "not live forecasts.")
 
 
 def unsubscribe_sig(email: str) -> str:

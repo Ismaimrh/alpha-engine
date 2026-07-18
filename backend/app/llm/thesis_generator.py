@@ -22,9 +22,12 @@ from app.llm.prompts import SYSTEM_PROMPT, build_thesis_prompt
 MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 400
 
-# USD per million tokens — verify at anthropic.com/pricing before launch.
-COST_PER_MTOK_INPUT = 3.00
-COST_PER_MTOK_OUTPUT = 15.00
+# USD per million tokens; overridable without a deploy when pricing
+# drifts (review #12). Defaults = last verified values.
+import os
+
+COST_PER_MTOK_INPUT = float(os.getenv("ANTHROPIC_INPUT_PRICE_PER_MTOK", "3.00"))
+COST_PER_MTOK_OUTPUT = float(os.getenv("ANTHROPIC_OUTPUT_PRICE_PER_MTOK", "15.00"))
 
 
 def estimate_cost(prompt_tokens: int, completion_tokens: int) -> float:

@@ -126,7 +126,9 @@ export default function Home() {
           daily; the live model ranks by the momentum composite, validated
           walk-forward with purge gaps and after transaction costs. A
           machine-learned ensemble runs in parallel as a challenger and is
-          promoted only if it wins on realized predictions.
+          promoted only if it wins on realized predictions with statistical
+          significance. Expected-return figures are model-implied estimates
+          (in-sample calibrated, capped at ±3σ), not live forecasts.
         </p>
         <p className="mt-3 border-l-2 border-rule pl-3 font-mono text-2xs">
           {picks.data?.disclaimer ??

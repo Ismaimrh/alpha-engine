@@ -115,7 +115,11 @@ def fetch_companies(company_ids: list[str]) -> dict[str, dict]:
 # ----------------------------------------------------------------- route
 
 @router.get("/api/picks", response_model=PicksResponse)
-def get_picks(
+def get_picks(  # noqa: D417
+    # NOTE (review #2/#7): predicted_return_30d is a MODEL-IMPLIED estimate:
+    # slope calibrated on the full resolved history (in-sample, not purged
+    # OOS) and alpha capped at +/-3 sigma for display. It is honest as a
+    # magnitude ORDER, not a live forecast. Rankings/alpha are unaffected.
     date: str | None = Query(None, description="YYYY-MM-DD; default latest"),
     limit: int = Query(20, ge=1, le=100),
     model: str = Query(CHAMPION_VERSION, description="model_version"),

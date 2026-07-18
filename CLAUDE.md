@@ -63,6 +63,21 @@ plus the amendments listed below. Read it fully before acting.
       estimate ~0.029. Insider v1/v2 reproduced exactly (price-side variance only).
       Nightly full-refetch prevents recurrence; raw-prices+adj-factors = post-MVP.
       NOTE: performance_daily Sharpe will shift modestly on the new basis (expected).
+- [x] EXTERNAL REVIEW TRIAGE (Minimax/Mavis, 2026-07-18): accepted+shipped batch —
+      CORS fail-closed (was '*' default), sparklines N+1 -> single IN-query,
+      subscribe logging + dep-free 5/min rate limit, promotion_verdict now requires
+      paired-t p<0.05 (challenger must not win by noise), price-window splice
+      sentinel in run_daily_factors (>=500 est. trading days or fail loud), LLM
+      pricing via env, predicted_return labeled as model-implied estimate (API
+      docstring + email disclaimer + methodology + honest UI dates: Gate-4 ~Sep,
+      promotion ~Nov), NEXT_PUBLIC_API_URL build-time guard, CI frontend typecheck,
+      ledger dedup. REJECTED: #21 per-ticker yf cache (would reintroduce adjustment-
+      basis splice). PUSHBACK: #8 v2-ensemble criterion was registered at decision
+      time in this ledger. DEFERRED to backlog: pagination DRY, logging refactor,
+      page.tsx split, PIT mcap for top-50, SignalCard product phase (strategic
+      appendix — next major phase, pre-registered). Models tab live: overlap
+      champion/sector-cand 76% (my 55-70% guess LOW), lgbm 14-16% (genuinely
+      distinct book); challenger alpha spikes (HONA +13.3σ) -> display backlog.
 - [x] GATE 3 SAME-PANEL COMPARISON (2026-07-16): champion Sharpe 1.722 (+40.9%,
       vol 21.2%, DD -20.1%) vs sector-rel 1.694 (+31.4%, vol 16.9%, DD -19.0%).
       Wash on Sharpe; sector-rel -23% vol; champion wins raw return via sector
@@ -131,7 +146,6 @@ plus the amendments listed below. Read it fully before acting.
       6.2 history: 261,560 rows / 520 dates, human-verified. Original note:
       RUN ONLY AFTER insider backfill completes + gate green. Congress: RESOLVED via
       Senate EFD (662 rows, fresh 2026-07-08); insider coverage transient, backfill running)
-- [ ] Step 6 — Compute factors
 - [~] GATE 2 — PASSED 2026-07-10: momentum IC 0.0396 (t=5.39, hit 59.3%, spread
       +31.4% ann pre-cost) over 486 days. Insider FAILED (-0.0039, t=-0.93):
       sell-dominated tape + zero-inflation + horizon mismatch; watch-item, formula

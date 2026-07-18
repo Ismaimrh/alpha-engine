@@ -85,8 +85,9 @@ export default function ModelsView() {
                 </div>
               ) : (
                 <p className="font-mono text-2xs text-muted">
-                  pending — first outcomes resolve 21 trading days after each
-                  prediction
+                  pending — first outcomes ~mid-Aug 2026; Gate-4 verdict
+                  ~early Sep; promotion-eligible comparisons (60 common
+                  resolved days + paired-t significance) ~early Nov
                 </p>
               )}
             </div>

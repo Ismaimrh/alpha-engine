@@ -2,10 +2,31 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import logging
+import time
+from collections import defaultdict, deque
+
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
 router = APIRouter()
+log = logging.getLogger(__name__)
+
+# Dependency-free per-IP rate limit (review #3). Fine for a single worker;
+# swap for slowapi/redis if the API ever scales out.
+_RATE_WINDOW_S, _RATE_MAX = 60, 5
+_hits: dict[str, deque] = defaultdict(deque)
+
+
+def _rate_limited(ip: str) -> bool:
+    now = time.monotonic()
+    q = _hits[ip]
+    while q and now - q[0] > _RATE_WINDOW_S:
+        q.popleft()
+    if len(q) >= _RATE_MAX:
+        return True
+    q.append(now)
+    return False
 
 
 class SubscribeRequest(BaseModel):
@@ -27,11 +48,16 @@ def upsert_subscriber(email: str, source: str | None) -> None:
 
 
 @router.post("/api/subscribe", response_model=SubscribeResponse, status_code=201)
-def subscribe(body: SubscribeRequest):
+def subscribe(body: SubscribeRequest, request: Request):
+    ip = request.client.host if request.client else "unknown"
+    if _rate_limited(ip):
+        raise HTTPException(429, "too many subscription attempts — try later")
     try:
         upsert_subscriber(body.email, body.source)
     except Exception as exc:  # noqa: BLE001
+        log.exception("subscribe failed for %s", body.email)
         raise HTTPException(503, "subscription storage unavailable") from exc
+    log.info("subscribed %s (source=%s, ip=%s)", body.email, body.source, ip)
     return SubscribeResponse(status="subscribed", email=body.email)
 
 

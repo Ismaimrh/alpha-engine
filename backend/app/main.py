@@ -30,11 +30,19 @@ app = FastAPI(
                  "not financial advice."),
 )
 
+_origin = (os.getenv("FRONTEND_ORIGIN") or "").strip()
+if not _origin:
+    import logging
+    logging.getLogger(__name__).warning(
+        "FRONTEND_ORIGIN unset — CORS is FAIL-CLOSED (no browser origins "
+        "allowed). Set it to the frontend URL in production."
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_ORIGIN", "*")],
+    allow_origins=[_origin] if _origin else [],
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type"],
+    allow_credentials=False,
 )
 
 app.include_router(picks_router)

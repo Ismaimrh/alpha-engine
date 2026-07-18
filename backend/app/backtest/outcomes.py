@@ -90,25 +90,41 @@ def realized_ic_by_day(outcomes: pd.DataFrame, min_names: int = 30) -> pd.Series
 
 
 def promotion_verdict(
-    champ_ic: pd.Series, chall_ic: pd.Series, min_days: int = 60
+    champ_ic: pd.Series, chall_ic: pd.Series, min_days: int = 60,
+    alpha: float = 0.05,
 ) -> dict:
-    """Data-driven promotion rule (Step 8 decision record):
-    promote the challenger iff BOTH models have >= min_days resolved days
-    on COMMON dates and the challenger's mean IC on those dates is higher.
-    """
+    """Data-driven promotion rule (Step 8 decision + review finding #11):
+    promote iff >= min_days COMMON resolved days AND the challenger's mean
+    IC is higher AND the paired difference is statistically significant
+    (paired t-test, p < alpha) — a challenger must not win by noise.
+    Zero-variance identical-delta edge case: treated as significant if the
+    (deterministic) difference is positive."""
     common = champ_ic.index.intersection(chall_ic.index)
     n = len(common)
     if n < min_days:
         return {"decision": "keep_champion", "common_days": n,
                 "reason": f"insufficient common resolved days ({n} < {min_days})"}
     c, ch = float(champ_ic[common].mean()), float(chall_ic[common].mean())
-    if ch > c:
+    diffs = (chall_ic[common] - champ_ic[common]).to_numpy()
+    if float(np.std(diffs, ddof=1)) == 0.0:
+        significant = bool(diffs.mean() > 0)
+        p_value = 0.0 if significant else 1.0
+    else:
+        from scipy.stats import ttest_rel
+
+        _, p_value = ttest_rel(chall_ic[common], champ_ic[common])
+        p_value = float(p_value)
+        significant = p_value < alpha and ch > c
+    if ch > c and significant:
         return {"decision": "promote_challenger", "common_days": n,
                 "champion_ic": round(c, 4), "challenger_ic": round(ch, 4),
-                "reason": "challenger realized IC higher on common dates"}
+                "p_value": round(p_value, 4),
+                "reason": "challenger IC higher AND significant (paired t)"}
     return {"decision": "keep_champion", "common_days": n,
             "champion_ic": round(c, 4), "challenger_ic": round(ch, 4),
-            "reason": "champion realized IC higher or equal"}
+            "p_value": round(p_value, 4),
+            "reason": ("difference not significant" if ch > c
+                       else "champion realized IC higher or equal")}
 
 
 # ------------------------------------------------------------------ DB layer

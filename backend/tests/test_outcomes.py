@@ -65,9 +65,10 @@ def test_realized_ic_positive_when_alpha_ranks_drift(closes):
 
 
 def test_promotion_rule():
+    rng = np.random.default_rng(7)
     days = pd.bdate_range("2026-01-01", periods=80).date
     champ = pd.Series(0.03, index=days)
-    chall_better = pd.Series(0.05, index=days)
+    chall_better = pd.Series(0.05, index=days)   # zero-variance delta path
     chall_worse = pd.Series(0.01, index=days)
 
     v = promotion_verdict(champ, chall_better, min_days=60)
@@ -77,6 +78,25 @@ def test_promotion_rule():
     v3 = promotion_verdict(champ.head(10), chall_better.head(10), min_days=60)
     assert v3["decision"] == "keep_champion"
     assert "insufficient" in v3["reason"]
+
+
+def test_promotion_requires_statistical_significance():
+    """Review #11: a noisy challenger 'winning' by chance must NOT promote."""
+    rng = np.random.default_rng(11)
+    days = pd.bdate_range("2026-01-01", periods=80).date
+    champ = pd.Series(0.030 + rng.normal(0, 0.05, 80), index=days)
+    # tiny mean edge, huge noise -> insignificant
+    lucky = pd.Series(0.032 + rng.normal(0, 0.05, 80), index=days)
+    v = promotion_verdict(champ, lucky, min_days=60)
+    assert v["decision"] == "keep_champion"
+    assert "significant" in v["reason"] or "higher" in v["reason"]
+    assert "p_value" in v
+    # large, consistent edge -> significant -> promote
+    strong = champ + 0.05 + rng.normal(0, 0.005, 80)
+    v2 = promotion_verdict(champ, pd.Series(strong.values, index=days),
+                           min_days=60)
+    assert v2["decision"] == "promote_challenger"
+    assert v2["p_value"] < 0.05
 
 
 def test_empty_inputs():

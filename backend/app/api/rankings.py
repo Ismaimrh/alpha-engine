@@ -89,6 +89,10 @@ class SparklinesResponse(BaseModel):
 
 
 def fetch_sparklines(tickers: list[str], days: int) -> dict[str, list[float]]:
+    """Single IN-query for all tickers (was N+1: 27 round-trips for 25
+    tickers — review finding #4)."""
+    from datetime import date, timedelta
+
     from app.utils.db import supabase
 
     comp = (
@@ -98,26 +102,33 @@ def fetch_sparklines(tickers: list[str], days: int) -> dict[str, list[float]]:
     id_to_ticker = {r["id"]: r["ticker"] for r in comp.data}
     if not id_to_ticker:
         return {}
-    dates = (
-        supabase.table("price_features").select("date")
-        .order("date", desc=True).limit(1).execute()
-    )
-    if not dates.data:
-        return {}
-    out: dict[str, list[float]] = {}
-    for cid, ticker in id_to_ticker.items():
+    start = (date.today() - timedelta(days=int(days * 1.6) + 10)).isoformat()
+    rows, page = [], 0
+    while True:
         resp = (
             supabase.table("price_features")
-            .select("date,close")
-            .eq("company_id", cid)
-            .order("date", desc=True)
-            .limit(days)
+            .select("date,company_id,close")
+            .in_("company_id", list(id_to_ticker))
+            .gte("date", start)
+            .order("id")
+            .range(page * 1000, page * 1000 + 999)
             .execute()
         )
-        closes = [float(r["close"]) for r in reversed(resp.data)
-                  if r["close"] is not None]
-        if closes:
-            out[ticker] = closes
+        rows.extend(resp.data)
+        if len(resp.data) < 1000:
+            break
+        page += 1
+    by_cid: dict[str, list[tuple[str, float]]] = {}
+    for r in rows:
+        if r["close"] is None:
+            continue
+        by_cid.setdefault(r["company_id"], []).append(
+            (r["date"], float(r["close"])))
+    out: dict[str, list[float]] = {}
+    for cid, ticker in id_to_ticker.items():
+        series = sorted(by_cid.get(cid, []))
+        if series:
+            out[ticker] = [v for _, v in series][-days:]
     return out
 
 
