@@ -57,6 +57,55 @@ plus the amendments listed below. Read it fully before acting.
   composite runs senate-only insider+senate legs. congress_loader's
   normalize/dedup/upsert path reused unchanged (source='senate_efd').
 
+- [x] REPRODUCIBILITY RESOLVED (2026-07-16): fresh full-window refetch ->
+      momentum 21d IC 0.0287 (t=3.96, 511d). Splice confirmed as the 0.0251 cause;
+      0.029-0.040 = sampling range across bases/windows of the same edge. Official
+      estimate ~0.029. Insider v1/v2 reproduced exactly (price-side variance only).
+      Nightly full-refetch prevents recurrence; raw-prices+adj-factors = post-MVP.
+      NOTE: performance_daily Sharpe will shift modestly on the new basis (expected).
+- [x] GATE 3 SAME-PANEL COMPARISON (2026-07-16): champion Sharpe 1.722 (+40.9%,
+      vol 21.2%, DD -20.1%) vs sector-rel 1.694 (+31.4%, vol 16.9%, DD -19.0%).
+      Wash on Sharpe; sector-rel -23% vol; champion wins raw return via sector
+      concentration. Lesson: higher IC != better top-N book (construction
+      mediates). Live realized-IC race decides; no hot-swap.
+- [x] PRODUCT BATCH 1 (2026-07-16): /api/models (race view: per-model top-10,
+      role tags, realized IC w/ honest pending state, pairwise top-50 overlap) +
+      /api/sectors (mean alpha by GICS). Frontend: Models tab (three cards +
+      overlap chips) + SectorStrip on Full Ranking. 149 tests.
+- [x] RESEARCH BATCH 2 VERDICTS (2026-07-16): momentum_sector_rel PASS both
+      horizons (21d 0.0317/t=5.69; 63d 0.0392/t=7.06/ICIR .326) — BEATS raw
+      momentum; now tracked model cand-sector-momentum-v1 (3rd prediction stream;
+      promotion via realized ICs only, no hot-swap). reversal_21d and low_vol
+      FAILED wrong-signed (t=-3.0 / t=-9.0): theses rejected; NO sign-flip
+      (data snooping); admitted to ensemble FEATURES only (GBM sign-agnostic,
+      predictive content qualifies). Scoreboard generalized to pairwise champion-
+      vs-all verdicts. insider_v2 stable near-miss. (Build notes: three candidates as standalone
+      columns (migration 012): momentum_sector_rel (z within GICS sector, <5-name
+      fallback to global), reversal_21d (-trailing 21d ret), low_vol (-63d realized
+      vol). assemble gains optional aux inputs (None -> NaN, old callers degrade
+      gracefully); daily fetchers fetch_sectors/fetch_trailing_stats; history
+      backfill vectorizes panel stats once. NOT in ensemble pre-gate (v2 earned it
+      only after its run). Awaiting human: migration 012 + --restart + gate2.
+- [ARCHIVED] REPRODUCIBILITY INVESTIGATION (2026-07-15, OPEN, blocks new factor gates):
+      momentum 21d IC 0.0396 -> 0.0251 between two --restart computations; insider
+      v1 reproduced exactly. Hypothesis: nightly 1.2y price refresh splices yfinance
+      adjustment bases across the stored panel. Prevention shipped (nightly window
+      1.2y -> 2.1y full refetch). Human diagnostic pending: fresh full 2.1y refetch
+      + --restart + gate2; IC ~0.039 returns => splice confirmed; stays ~0.025 =>
+      that is the honest estimate.
+- [x] RESEARCH CYCLE 1 VERDICT: insider_v2 = near-miss (21d: 0.0124/t=4.84; 63d:
+      0.0181/t=6.36/ICIR 0.303/hit 63.9%). Pre-registered bar (IC>=0.02) NOT met ->
+      NOT promoted to composite (no post-hoc goalposts). Joins ensemble FEATURES
+      (train/predict/eval wired); champion/challenger will judge on realized ICs.
+      Negative decile spread = zero-inflation artifact (tied zeros), IC is the metric.
+- [~] RESEARCH CYCLE 1 (post-launch, 2026-07-15): insider_buy_signal_v2 candidate
+      — purchases only, log1p(value/mcap) scaling, distinct-buyer breadth
+      multiplier, 180d window (Lakonishok-Lee / Cohen-Malloy-Pomorski). Standalone
+      factor_scores.insider_v2 column (migration 011); composite/champion
+      UNTOUCHED pending its own Gate 2. Fetch windows widened to 180d (daily +
+      history prefilter). Awaiting human: migration 011, backfill --restart,
+      gate2 at 21d AND 63d horizons.
+
 ## Project status ledger (update at every step)
 
 - [x] Step 1 — Repo and dependencies (done 2026-07-08; deps repinned to latest stable per v3.1)

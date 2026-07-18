@@ -2,18 +2,21 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import ModelsView from "@/components/ModelsView";
 import PerformanceChart from "@/components/PerformanceChart";
 import PicksTable from "@/components/PicksTable";
 import RankingsView from "@/components/RankingsView";
+import SectorStrip from "@/components/SectorStrip";
 import SubscribeBox from "@/components/SubscribeBox";
 import { fetchPicks, fetchStats } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type Tab = "picks" | "ranking" | "performance";
+type Tab = "picks" | "ranking" | "models" | "performance";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "picks", label: "Top Picks" },
   { id: "ranking", label: "Full Ranking" },
+  { id: "models", label: "Models" },
   { id: "performance", label: "Performance" },
 ];
 
@@ -101,7 +104,13 @@ export default function Home() {
           {picks.data && <PicksTable picks={picks.data.picks} />}
         </>
       )}
-      {tab === "ranking" && <RankingsView />}
+      {tab === "ranking" && (
+        <>
+          <SectorStrip />
+          <RankingsView />
+        </>
+      )}
+      {tab === "models" && <ModelsView />}
       {tab === "performance" && <PerformanceChart />}
 
       {/* Methodology + disclaimer */}

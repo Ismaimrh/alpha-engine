@@ -98,6 +98,40 @@ export const fetchSparklines = (tickers: string[], days = 90) =>
 export const fetchPerformance = () =>
   get<PerformanceResponse>(`/api/performance`);
 
+export interface ModelCard {
+  model_version: string;
+  role: "champion" | "candidate" | "challenger";
+  top10: { rank: number; ticker: string; alpha_score: number }[];
+  realized: {
+    n_days: number;
+    mean_ic: number | null;
+    t_stat: number | null;
+    hit_rate: number | null;
+  } | null;
+}
+
+export interface ModelsResponse {
+  date: string;
+  models: ModelCard[];
+  overlap_top50: Record<string, number>;
+  note: string;
+}
+
+export interface SectorRow {
+  sector: string;
+  n: number;
+  mean_alpha: number;
+  top_ticker: string;
+}
+
+export interface SectorsResponse {
+  date: string;
+  sectors: SectorRow[];
+}
+
+export const fetchModels = () => get<ModelsResponse>(`/api/models`);
+export const fetchSectors = () => get<SectorsResponse>(`/api/sectors`);
+
 export async function subscribe(email: string): Promise<boolean> {
   try {
     const res = await fetch(`${API}/api/subscribe`, {
