@@ -174,6 +174,41 @@ export interface HitRateResponse {
   note: string;
 }
 
+export interface StockResponse {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  date: string;
+  prices: { date: string; close: number }[];
+  factors: {
+    date: string;
+    momentum: number | null;
+    valuation: number | null;
+    quality: number | null;
+    insider_congress: number | null;
+  }[];
+  models: {
+    model_version: string;
+    alpha_score: number;
+    predicted_return_30d: number | null;
+    rank: number | null;
+  }[];
+  cards: {
+    issue_date: string;
+    direction: string;
+    entry: number;
+    target: number;
+    stop: number;
+    status: string;
+    resolved_date: string | null;
+    realized_return: number | null;
+  }[];
+  thesis: string | null;
+}
+
+export const fetchStock = (ticker: string) =>
+  get<StockResponse>(`/api/stock/${encodeURIComponent(ticker)}`);
+
 export const fetchSignals = () => get<SignalsResponse>(`/api/signals`);
 export const fetchSignalLedger = (offset = 0, limit = 50) =>
   get<LedgerResponse>(`/api/signals/ledger?offset=${offset}&limit=${limit}`);

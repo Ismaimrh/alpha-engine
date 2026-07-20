@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import AlphaBar from "@/components/AlphaBar";
 import { fetchRankings } from "@/lib/api";
 import { cn, fmtPct, pnlColor } from "@/lib/utils";
@@ -80,7 +81,7 @@ export default function RankingsView() {
           >
             <span className="font-mono text-xs text-muted">{r.rank}</span>
             <span className="font-display text-sm font-semibold text-bright">
-              {r.ticker}
+              <Link href={`/stock/${r.ticker}`} className="hover:text-cobalt">{r.ticker}</Link>
             </span>
             <span className="truncate text-xs">
               {r.name}

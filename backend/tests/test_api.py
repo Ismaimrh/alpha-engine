@@ -304,3 +304,37 @@ def test_hitrate_d4_reporting_with_wilson(monkeypatch):
     assert body["n_expired"] == 1
     assert body["hit_rate"] == 0.625
     assert body["wilson_low"] < 0.625 < body["wilson_high"]
+
+
+def test_stock_detail_endpoint(monkeypatch):
+    import app.api.stock as stock_mod
+    monkeypatch.setattr(stock_mod, "fetch_company", lambda t: {
+        "id": "id-1", "ticker": "SNDK", "name": "Sandisk", "sector": "IT"})
+    monkeypatch.setattr(picks_mod, "fetch_latest_prediction_date",
+                        lambda mv: "2026-07-17")
+    monkeypatch.setattr(stock_mod, "fetch_price_series", lambda cid, days=260: [
+        {"date": "2026-07-16", "close": 100.0},
+        {"date": "2026-07-17", "close": 104.0}])
+    monkeypatch.setattr(stock_mod, "fetch_factor_series", lambda cid, days=90: [
+        {"date": "2026-07-17", "momentum_composite": 5.17,
+         "valuation_composite": -0.7, "quality_composite": -0.27,
+         "insider_congress_composite": 0.11}])
+    monkeypatch.setattr(stock_mod, "fetch_model_views", lambda cid, d: [
+        {"model_version": "champion-momentum-v1", "alpha_score": 5.17,
+         "predicted_return_30d": 0.025, "rank": 1}])
+    monkeypatch.setattr(stock_mod, "fetch_stock_cards", lambda cid: [
+        {"issue_date": "2026-07-17", "direction": "BUY", "entry": 104.0,
+         "target": 122.0, "stop": 93.0, "status": "open",
+         "resolved_date": None, "realized_return": None}])
+    monkeypatch.setattr(stock_mod, "fetch_thesis_text",
+                        lambda cid, d: "The Signal ...")
+    r = client.get("/api/stock/sndk")   # lowercase must work
+    assert r.status_code == 200
+    body = r.json()
+    assert body["ticker"] == "SNDK"
+    assert body["models"][0]["rank"] == 1
+    assert body["cards"][0]["direction"] == "BUY"
+    assert len(body["prices"]) == 2
+
+    monkeypatch.setattr(stock_mod, "fetch_company", lambda t: None)
+    assert client.get("/api/stock/NOPE").status_code == 404

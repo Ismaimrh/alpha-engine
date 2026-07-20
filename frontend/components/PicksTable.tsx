@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import AlphaBar from "@/components/AlphaBar";
 import RankDelta from "@/components/RankDelta";
@@ -38,7 +39,12 @@ function Detail({ ticker }: { ticker: string }) {
   return (
     <div className="grid animate-fade-in gap-5 border-t border-rule bg-panel px-3 py-4 md:grid-cols-[minmax(0,18rem)_1fr]">
       <div>
-        <h3 className="label-2xs mb-2">Factor breakdown</h3>
+        <h3 className="label-2xs mb-2">
+          Factor breakdown
+          <Link href={`/stock/${ticker}`} className="ml-3 normal-case text-cobalt hover:underline">
+            full view →
+          </Link>
+        </h3>
         {factors.isPending && (
           <div className="space-y-2">
             {FACTOR_LABELS.map(([k]) => (
