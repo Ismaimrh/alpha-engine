@@ -133,6 +133,52 @@ export interface SectorsResponse {
   sectors: SectorRow[];
 }
 
+export interface SignalCardT {
+  ticker: string;
+  issue_date: string;
+  direction: "BUY" | "AVOID";
+  alpha_score: number;
+  entry: number;
+  target: number;
+  stop: number;
+  sigma_21: number;
+  horizon_days: number;
+  status: string;
+  resolved_date: string | null;
+  resolved_close: number | null;
+  realized_return: number | null;
+}
+
+export interface SignalsResponse {
+  open_cards: SignalCardT[];
+  note: string;
+}
+
+export interface LedgerResponse {
+  cards: SignalCardT[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface HitRateResponse {
+  state: "collecting" | "reporting";
+  n_resolved: number;
+  n_hit: number;
+  n_stop: number;
+  n_expired: number;
+  hit_rate: number | null;
+  wilson_low: number | null;
+  wilson_high: number | null;
+  avg_realized_return: number | null;
+  note: string;
+}
+
+export const fetchSignals = () => get<SignalsResponse>(`/api/signals`);
+export const fetchSignalLedger = (offset = 0, limit = 50) =>
+  get<LedgerResponse>(`/api/signals/ledger?offset=${offset}&limit=${limit}`);
+export const fetchHitRate = () => get<HitRateResponse>(`/api/hitrate`);
+
 export const fetchModels = () => get<ModelsResponse>(`/api/models`);
 export const fetchSectors = () => get<SectorsResponse>(`/api/sectors`);
 
