@@ -156,8 +156,14 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
     )
     chall_alpha = ((chall_pred - chall_pred.mean()) / chall_pred.std(ddof=0)
                    if chall_pred.std(ddof=0) > 0 else chall_pred * 0.0)
+    # Display honesty (same ±3σ policy as champion/sector-cand — found in
+    # prod: SNDK printed "+36.7% est." from an 11.97σ GBM spike): winsorize
+    # the DISPLAYED return at mean±3σ of the cross-section; alpha stays raw,
+    # ranking unaffected (clip is monotonic).
+    _m, _s = float(chall_pred.mean()), float(chall_pred.std(ddof=0))
+    chall_pred_disp = chall_pred.clip(_m - ALPHA_CLIP * _s, _m + ALPHA_CLIP * _s)
     chall_rows = build_prediction_rows(
-        latest, chall_alpha, chall_pred, CHALLENGER_VERSION, top_n
+        latest, chall_alpha, chall_pred_disp, CHALLENGER_VERSION, top_n
     )
 
     written = 0

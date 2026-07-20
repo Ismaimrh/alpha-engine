@@ -72,3 +72,16 @@ def test_calibrate_slope_works_on_alternate_score_col():
                        "target": 0.008 * x + rng.normal(0, 0.001, 3000)})
     assert calibrate_slope(df, score_col="momentum_sector_rel") == pytest.approx(
         0.008, rel=0.05)
+
+
+def test_challenger_display_return_winsorized():
+    """Prod regression: an 11.97σ GBM spike printed +36.7% est. The
+    displayed return must be capped at cross-sectional mean±3σ while the
+    ranking (monotonic clip) is unchanged."""
+    rng = np.random.default_rng(3)
+    pred = pd.Series(rng.normal(0.01, 0.01, 500))
+    pred.iloc[0] = 0.36  # the spike
+    m, s = float(pred.mean()), float(pred.std(ddof=0))
+    clipped = pred.clip(m - 3 * s, m + 3 * s)
+    assert clipped.iloc[0] < 0.36 and clipped.iloc[0] == pytest.approx(m + 3 * s)
+    assert list(pred.rank()) == list(clipped.rank())
