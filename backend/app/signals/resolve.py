@@ -30,9 +30,17 @@ def resolve_card_path(
     stop: float,
     closes_after: pd.Series,  # date-indexed closes AFTER issue, ascending
     horizon_days: int,
+    series_terminated: bool = False,  # D3(d): ticker delisted/left universe
 ) -> dict | None:
     """Pure D3 walk. Returns {status, resolved_date, resolved_close,
-    realized_return} or None if still open and unexpired."""
+    realized_return} or None if still open and unexpired.
+
+    D3(d) (spec v1.2): if the price series has TERMINATED (delisting via
+    M&A or bankruptcy, index removal without further data) the card cannot
+    stay open forever — it resolves at the last available close: the walk
+    still checks touch events on the available path first (a bankruptcy
+    slide hits the stop on the way down; an M&A pop hits the target), and
+    only a terminated no-event path resolves as expired-at-last-close."""
     if closes_after.empty:
         return None
     window = closes_after.iloc[:horizon_days]
@@ -55,6 +63,8 @@ def resolve_card_path(
         status, when = "stop", stop_ix
     elif len(window) >= horizon_days:
         status, when = "expired", window.index[-1]
+    elif series_terminated:
+        status, when = "expired", window.index[-1]  # D3(d) terminal case
     else:
         return None  # open, horizon not elapsed
 
@@ -91,6 +101,7 @@ def resolve_open_cards() -> dict:
     wide = (closes.pivot(index="date", columns="company_id", values="close")
             .sort_index().astype(float))
 
+    panel_last = wide.index.max()
     counts = {"hit": 0, "stop": 0, "expired": 0}
     for _, card in open_cards.iterrows():
         cid = card["company_id"]
@@ -99,9 +110,15 @@ def resolve_open_cards() -> dict:
         issue = pd.to_datetime(card["issue_date"]).date()
         series = wide[cid].dropna()
         after = series.loc[series.index > issue]
+        # series terminated = no prints for >5 trading days while the panel
+        # itself has moved on (delisting / index removal)
+        terminated = (len(after) > 0
+                      and (wide.index > after.index.max()).sum() > 5
+                      and panel_last > after.index.max())
         outcome = resolve_card_path(
             card["direction"], float(card["entry"]), float(card["target"]),
             float(card["stop"]), after, int(card["horizon_days"]),
+            series_terminated=terminated,
         )
         if outcome is None:
             continue

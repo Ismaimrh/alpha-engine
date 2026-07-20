@@ -43,6 +43,17 @@ class LedgerResponse(BaseModel):
     limit: int
 
 
+class DirectionStats(BaseModel):
+    state: str
+    n_resolved: int
+    n_hit: int
+    n_stop: int
+    n_expired: int
+    hit_rate: float | None
+    wilson_low: float | None
+    wilson_high: float | None
+
+
 class HitRateResponse(BaseModel):
     state: str                      # "collecting" | "reporting"
     n_resolved: int                 # hit + stop (expired excluded, D4)
@@ -53,6 +64,8 @@ class HitRateResponse(BaseModel):
     wilson_low: float | None
     wilson_high: float | None
     avg_realized_return: float | None
+    by_direction: dict[str, DirectionStats] = {}  # v1.2: BUY/AVOID nulls
+                                                  # differ ~2x — never pool
     note: str = ("Hit rate = hits / (hits + stops), close-touch rule, "
                  "expired cards excluded but listed in the ledger. "
                  "Displayed only once N >= 30 resolved (pre-registered).")
@@ -83,6 +96,24 @@ def get_ledger(offset: int = Query(0, ge=0),
                           total=total, offset=offset, limit=limit)
 
 
+def _direction_stats(rows: list[dict]) -> "DirectionStats":
+    from app.signals.resolve import wilson_ci
+
+    n_hit = sum(1 for r in rows if r["status"] == "hit")
+    n_stop = sum(1 for r in rows if r["status"] == "stop")
+    n_exp = sum(1 for r in rows if r["status"] == "expired")
+    n = n_hit + n_stop
+    if n < MIN_N_FOR_DISPLAY:
+        return DirectionStats(state="collecting", n_resolved=n, n_hit=n_hit,
+                              n_stop=n_stop, n_expired=n_exp, hit_rate=None,
+                              wilson_low=None, wilson_high=None)
+    lo, hi = wilson_ci(n_hit, n)
+    return DirectionStats(state="reporting", n_resolved=n, n_hit=n_hit,
+                          n_stop=n_stop, n_expired=n_exp,
+                          hit_rate=round(n_hit / n, 4),
+                          wilson_low=lo, wilson_high=hi)
+
+
 @router.get("/api/hitrate", response_model=HitRateResponse)
 def get_hitrate():
     from app.signals.resolve import wilson_ci
@@ -95,17 +126,21 @@ def get_hitrate():
     rets = [float(r["realized_return"]) for r in rows
             if r.get("realized_return") is not None]
     avg_ret = round(sum(rets) / len(rets), 6) if rets else None
+    by_dir = {d: _direction_stats([r for r in rows if r["direction"] == d])
+              for d in ("BUY", "AVOID")}
     if n < MIN_N_FOR_DISPLAY:
         return HitRateResponse(state="collecting", n_resolved=n, n_hit=n_hit,
                                n_stop=n_stop, n_expired=n_exp, hit_rate=None,
                                wilson_low=None, wilson_high=None,
-                               avg_realized_return=avg_ret)
+                               avg_realized_return=avg_ret,
+                               by_direction=by_dir)
     lo, hi = wilson_ci(n_hit, n)
     return HitRateResponse(state="reporting", n_resolved=n, n_hit=n_hit,
                            n_stop=n_stop, n_expired=n_exp,
                            hit_rate=round(n_hit / n, 4),
                            wilson_low=lo, wilson_high=hi,
-                           avg_realized_return=avg_ret)
+                           avg_realized_return=avg_ret,
+                           by_direction=by_dir)
 
 
 def _shape(r: dict) -> dict:

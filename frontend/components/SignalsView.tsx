@@ -55,8 +55,15 @@ function HitRateHeader() {
 
 function Card({ c }: { c: SignalCardT }) {
   const buy = c.direction === "BUY";
-  const range = c.target - c.stop;
-  const pos = Math.min(1, Math.max(0, (c.entry - c.stop) / range));
+  // AVOID mechanics are mirrored in the resolver (hit = fall to downside
+  // target, stopped by rallies). Display the MIRRORED levels so the card
+  // reads in its own frame — showing the BUY-frame target above entry on
+  // an AVOID card was misleading (spec v1.2 / review G1).
+  const dTarget = buy ? c.target : c.entry - (c.target - c.entry);
+  const dStop = buy ? c.stop : c.entry + (c.entry - c.stop);
+  const lo = Math.min(dTarget, dStop);
+  const hi = Math.max(dTarget, dStop);
+  const pos = Math.min(1, Math.max(0, (c.entry - lo) / (hi - lo)));
   return (
     <div className="border border-rule bg-panel">
       <div className="flex items-baseline justify-between border-b border-rule px-3 py-2">
@@ -74,23 +81,28 @@ function Card({ c }: { c: SignalCardT }) {
       </div>
       <div className="px-3 py-2 font-mono text-xs">
         <div className="mb-1.5 flex justify-between text-2xs text-muted">
-          <span>stop {fmt(c.stop)}</span>
+          <span>{buy ? `stop ${fmt(dStop)}` : `target ${fmt(dTarget)}`}</span>
           <span>entry {fmt(c.entry)}</span>
-          <span>target {fmt(c.target)}</span>
+          <span>{buy ? `target ${fmt(dTarget)}` : `stop ${fmt(dStop)}`}</span>
         </div>
         <div className="relative h-1.5 w-full bg-track">
           <div
             className="absolute top-0 h-1.5 w-0.5 bg-bright"
             style={{ left: `${pos * 100}%` }}
           />
-          <div className="absolute left-0 top-0 h-1.5 w-[2px] bg-loss" />
-          <div className="absolute right-0 top-0 h-1.5 w-[2px] bg-gain" />
+          <div className={`absolute left-0 top-0 h-1.5 w-[2px] ${buy ? "bg-loss" : "bg-gain"}`} />
+          <div className={`absolute right-0 top-0 h-1.5 w-[2px] ${buy ? "bg-gain" : "bg-loss"}`} />
         </div>
         <div className="mt-2 flex justify-between text-2xs text-muted">
           <span>α {c.alpha_score >= 0 ? "+" : ""}{c.alpha_score.toFixed(2)}</span>
           <span>σ₂₁ {(c.sigma_21 * 100).toFixed(1)}%</span>
           <span>{c.horizon_days}d · {c.issue_date}</span>
         </div>
+        {!buy && (
+          <p className="mt-1 text-2xs text-muted">
+            avoid / underweight — not a short recommendation
+          </p>
+        )}
       </div>
     </div>
   );
@@ -192,7 +204,9 @@ export default function SignalsView() {
       ) : (
         <>
           <p className="mb-2 font-mono text-2xs text-muted">
-            {q.data.open_cards.length} open · {q.data.note.toLowerCase()}
+            {q.data.open_cards.length} open · {q.data.note.toLowerCase()}{" "}
+            · entry = issue-day close; next-day fills differ (overnight gap
+            risk is the reader&apos;s)
           </p>
           <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
             {q.data.open_cards.map((c) => (

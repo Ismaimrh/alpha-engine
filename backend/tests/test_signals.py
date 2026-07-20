@@ -96,3 +96,19 @@ def test_d4_wilson_ci():
     assert wilson_ci(0, 0) == (0.0, 0.0)
     lo_big, hi_big = wilson_ci(600, 1000)
     assert hi_big - lo_big < 0.07          # tightens with N
+
+
+def test_d3d_terminated_series_resolves_at_last_close():
+    # bankruptcy-style slide: hits the stop on the way down (event wins)
+    slide = _path([90, 60, 20])
+    out = resolve_card_path("BUY", 100, 110, 95, slide, HORIZON_DAYS,
+                            series_terminated=True)
+    assert out["status"] == "stop"
+    # terminated flat path, no event: expired at last available close
+    stub = _path([101, 102])
+    out2 = resolve_card_path("BUY", 100, 110, 95, stub, HORIZON_DAYS,
+                             series_terminated=True)
+    assert out2["status"] == "expired"
+    assert out2["realized_return"] == pytest.approx(0.02, rel=1e-6)
+    # same stub NOT terminated: stays open (regression guard)
+    assert resolve_card_path("BUY", 100, 110, 95, stub, HORIZON_DAYS) is None

@@ -86,7 +86,9 @@ __CARDS__
         )
         cards_html = (
             "<p style='color:#7A8580;font-size:12px;margin:16px 0 4px'>"
-            "NEW SIGNAL CARDS (21 trading days, close-touch rule)</p>"
+            "NEW SIGNAL CARDS (21 trading days, close-touch rule; entry = "
+            "issue close — next-day fills differ, overnight gap risk is "
+            "yours; AVOID = underweight, not a short)</p>"
             f"<table style='border-collapse:collapse;font-size:12px'>{card_rows}</table>"
         )
     html = html.replace("__CARDS__", cards_html)
