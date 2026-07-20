@@ -37,9 +37,11 @@ def unsubscribe_sig(email: str) -> str:
                     hashlib.sha256).hexdigest()[:20]
 
 
-def render_email(date: str, picks: list[dict], api_url: str) -> tuple[str, str]:
+def render_email(date: str, picks: list[dict], api_url: str,
+                 cards: list[dict] | None = None) -> tuple[str, str]:
     """(subject, html). picks: [{rank, ticker, name, alpha_score,
-    predicted_return_30d}]."""
+    predicted_return_30d}]; cards (optional): today's new SignalCards
+    [{ticker, direction, entry, target, stop}]."""
     subject = f"Alpha Engine top 10 — {date}"
     rows = "".join(
         f"<tr>"
@@ -63,10 +65,31 @@ def render_email(date: str, picks: list[dict], api_url: str) -> tuple[str, str]:
 <th style="padding:4px 10px">exp 1mo</th></tr>
 {rows}
 </table>
+__CARDS__
 <p style="margin:16px 0"><a href="{SITE_URL}" style="color:#5B7CFF">full ranking, factors &amp; theses →</a></p>
 <p style="color:#7A8580;font-size:11px;border-left:2px solid #242C28;padding-left:8px">{DISCLAIMER}</p>
 <p style="font-size:10px;color:#7A8580">__UNSUB__</p>
 </div>"""
+    cards_html = ""
+    if cards:
+        card_rows = "".join(
+            f"<tr>"
+            f"<td style='padding:3px 10px;font-weight:600;"
+            f"color:{'#4ADE80' if c['direction'] == 'BUY' else '#F87171'}'>"
+            f"{c['direction']}</td>"
+            f"<td style='padding:3px 10px;font-weight:600'>{c['ticker']}</td>"
+            f"<td style='padding:3px 10px'>entry {c['entry']:.2f}</td>"
+            f"<td style='padding:3px 10px'>target {c['target']:.2f}</td>"
+            f"<td style='padding:3px 10px'>stop {c['stop']:.2f}</td>"
+            f"</tr>"
+            for c in cards
+        )
+        cards_html = (
+            "<p style='color:#7A8580;font-size:12px;margin:16px 0 4px'>"
+            "NEW SIGNAL CARDS (21 trading days, close-touch rule)</p>"
+            f"<table style='border-collapse:collapse;font-size:12px'>{card_rows}</table>"
+        )
+    html = html.replace("__CARDS__", cards_html)
     return subject, html
 
 

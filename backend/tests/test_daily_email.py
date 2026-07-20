@@ -33,6 +33,16 @@ def test_send_batch_dry_run_without_key(monkeypatch, capsys):
     assert "[dry-run]" in capsys.readouterr().out
 
 
+def test_force_dry_beats_present_key(monkeypatch, capsys):
+    """Regression: --dry-run sent a real email because load_dotenv restored
+    the popped key. force_dry must win over an existing key."""
+    monkeypatch.setenv("RESEND_API_KEY", "real-key")
+    _, html = render_email("2026-07-14", PICKS, "http://api")
+    result = send_batch(["a@x.com"], "s", html, "http://api", force_dry=True)
+    assert result["dry_run"] is True and result["sent"] == 1
+    assert "[dry-run]" in capsys.readouterr().out
+
+
 def test_unsubscribe_sig_deterministic_and_email_bound(monkeypatch):
     monkeypatch.setenv("SUPABASE_SERVICE_KEY", "k1")
     a1, a2 = unsubscribe_sig("a@x.com"), unsubscribe_sig("a@x.com")
@@ -61,11 +71,15 @@ def test_winsorized_predicted_return_rank_invariant():
     assert clipped["sndk"] == 3.0 and clipped["axon"] == 1.25
     assert list(alpha.rank()) == list(clipped.rank())  # ranking unchanged
 
-def test_force_dry_beats_present_key(monkeypatch, capsys):
-    """Regression: --dry-run sent a real email because load_dotenv restored
-    the popped key. force_dry must win over an existing key."""
-    monkeypatch.setenv("RESEND_API_KEY", "real-key")
-    _, html = render_email("2026-07-14", PICKS, "http://api")
-    result = send_batch(["a@x.com"], "s", html, "http://api", force_dry=True)
-    assert result["dry_run"] is True and result["sent"] == 1
-    assert "[dry-run]" in capsys.readouterr().out
+
+def test_email_renders_signal_cards_section():
+    cards = [{"ticker": "SNDK", "direction": "BUY", "entry": 100.0,
+              "target": 118.5, "stop": 91.2},
+             {"ticker": "XYZ", "direction": "AVOID", "entry": 50.0,
+              "target": 55.0, "stop": 47.0}]
+    _, html = render_email("2026-07-17", PICKS, "http://api", cards=cards)
+    assert "NEW SIGNAL CARDS" in html
+    assert "target 118.50" in html and "stop 91.20" in html
+    # no cards -> section absent entirely
+    _, html2 = render_email("2026-07-17", PICKS, "http://api", cards=[])
+    assert "NEW SIGNAL CARDS" not in html2

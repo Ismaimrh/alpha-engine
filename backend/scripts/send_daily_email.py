@@ -20,9 +20,6 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    # if args.dry_run:
-    #     os.environ.pop("RESEND_API_KEY", None)
-
     from app.api.picks import (fetch_companies, fetch_latest_prediction_date,
                                fetch_predictions)
     from app.ml.predict import CHAMPION_VERSION
@@ -47,8 +44,17 @@ def main() -> int:
         return 0
 
     api_url = os.getenv("API_URL", "http://127.0.0.1:8000")
-    subject, html = render_email(pred_date, picks, api_url)
-    result = send_batch(emails, subject, html, api_url, force_dry=args.dry_run)    
+    try:
+        card_rows = (supabase.table("signal_cards")
+                     .select("ticker,direction,entry,target,stop")
+                     .eq("issue_date", pred_date).eq("status", "open")
+                     .order("alpha_score", desc=True).limit(20)
+                     .execute()).data
+    except Exception:  # noqa: BLE001 — cards are garnish; email must send
+        card_rows = []
+    subject, html = render_email(pred_date, picks, api_url, cards=card_rows)
+    result = send_batch(emails, subject, html, api_url,
+                        force_dry=args.dry_run)
     print(f"--- daily email ---\n  date: {pred_date}\n  subscribers: "
           f"{len(emails)}\n  {result}")
     return 0 if result["failed"] == 0 else 1

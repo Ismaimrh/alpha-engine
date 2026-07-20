@@ -6,7 +6,8 @@
 Order matters: data -> factors -> predictions -> theses -> performance.
 
 Window tuning (fractional years; loaders use int(years*365.25) days):
-    prices       1.2y  — momentum_12_1 needs ~13 months + warm-up pad
+    prices       2.1y  — FULL panel window; partial refreshes splice
+                 adjustment bases (see prices step comment)
     fundamentals snapshot (accumulates daily; valuation factor grows teeth)
     insider      0.04y (~15 days) — catches late/amended Form 4s cheaply
     congress     NOT here — needs a display server for Chrome; runs in the
@@ -64,7 +65,11 @@ def main() -> int:
     from app.data_pipeline.yfinance_loader import backfill_prices
 
     steps: list[tuple[str, object]] = [
-        ("prices", lambda: backfill_prices(years=1.2, cache=False)),
+        # FULL window nightly: yfinance re-bases adjusted closes on every
+        # fetch (dividends), so partial-window refreshes SPLICE the stored
+        # panel across two bases (reproducibility break found 2026-07-15:
+        # momentum IC 0.0396 -> 0.0251 after nightly partial rewrites).
+        ("prices", lambda: backfill_prices(years=2.1, cache=False)),
         ("fundamentals", lambda: backfill_fundamentals()),
         ("insider", lambda: backfill_insider(years=0.04)),
         ("factors", script("run_daily_factors.py")),
@@ -74,6 +79,8 @@ def main() -> int:
         steps.append(("theses",
                       script("generate_theses.py", "--top-n", "10",
                              "--max-cost", "0.25")))
+    steps.append(("signals_issue", script("issue_signals.py")))
+    steps.append(("signals_resolve", script("resolve_signals.py")))
     steps.append(("outcomes", script("resolve_outcomes.py")))
     steps.append(("performance", script("export_performance.py")))
     steps.append(("email", script("send_daily_email.py")))

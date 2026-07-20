@@ -7,15 +7,17 @@ import PerformanceChart from "@/components/PerformanceChart";
 import PicksTable from "@/components/PicksTable";
 import RankingsView from "@/components/RankingsView";
 import SectorStrip from "@/components/SectorStrip";
+import SignalsView from "@/components/SignalsView";
 import SubscribeBox from "@/components/SubscribeBox";
 import { fetchPicks, fetchStats } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type Tab = "picks" | "ranking" | "models" | "performance";
+type Tab = "picks" | "ranking" | "signals" | "models" | "performance";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "picks", label: "Top Picks" },
   { id: "ranking", label: "Full Ranking" },
+  { id: "signals", label: "Signals" },
   { id: "models", label: "Models" },
   { id: "performance", label: "Performance" },
 ];
@@ -110,6 +112,7 @@ export default function Home() {
           <RankingsView />
         </>
       )}
+      {tab === "signals" && <SignalsView />}
       {tab === "models" && <ModelsView />}
       {tab === "performance" && <PerformanceChart />}
 

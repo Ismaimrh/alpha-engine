@@ -254,3 +254,53 @@ def test_sectors_endpoint(monkeypatch):
     assert body["sectors"][0]["n"] == 2
     assert body["sectors"][0]["top_ticker"] == "SNDK"
     assert body["sectors"][1]["mean_alpha"] == -0.5
+
+
+def _card_row(ticker, status, direction="BUY", ret=None):
+    return {"ticker": ticker, "issue_date": "2026-07-17",
+            "direction": direction, "alpha_score": 1.5, "entry": 100.0,
+            "target": 110.0, "stop": 95.0, "sigma_21": 0.07,
+            "horizon_days": 21, "status": status, "resolved_date": None,
+            "resolved_close": None, "realized_return": ret}
+
+
+def test_signals_and_ledger_endpoints(monkeypatch):
+    import app.api.signals as sig_mod
+    monkeypatch.setattr(sig_mod, "fetch_cards",
+                        lambda st, o, l: ([_card_row("SNDK", "open")], 1))
+    r = client.get("/api/signals")
+    assert r.status_code == 200
+    assert r.json()["open_cards"][0]["ticker"] == "SNDK"
+    assert "close-touch" in r.json()["note"]
+
+    monkeypatch.setattr(sig_mod, "fetch_cards",
+                        lambda st, o, l: ([_card_row("VLO", "hit", ret=0.11)], 7))
+    r2 = client.get("/api/signals/ledger?offset=0&limit=5")
+    assert r2.status_code == 200
+    assert r2.json()["total"] == 7
+
+
+def test_hitrate_d4_collecting_below_30(monkeypatch):
+    import app.api.signals as sig_mod
+    rows = [_card_row(f"T{i}", "hit", ret=0.1) for i in range(10)] + \
+           [_card_row(f"S{i}", "stop", ret=-0.05) for i in range(5)]
+    monkeypatch.setattr(sig_mod, "fetch_cards", lambda st, o, l: (rows, 15))
+    body = client.get("/api/hitrate").json()
+    assert body["state"] == "collecting"
+    assert body["n_resolved"] == 15
+    assert body["hit_rate"] is None and body["wilson_low"] is None
+    assert body["avg_realized_return"] is not None  # returns shown, rate withheld
+
+
+def test_hitrate_d4_reporting_with_wilson(monkeypatch):
+    import app.api.signals as sig_mod
+    rows = ([_card_row(f"T{i}", "hit", ret=0.1) for i in range(20)]
+            + [_card_row(f"S{i}", "stop", ret=-0.05) for i in range(12)]
+            + [_card_row("E0", "expired", ret=0.01)])
+    monkeypatch.setattr(sig_mod, "fetch_cards", lambda st, o, l: (rows, 33))
+    body = client.get("/api/hitrate").json()
+    assert body["state"] == "reporting"
+    assert body["n_resolved"] == 32          # expired excluded from N
+    assert body["n_expired"] == 1
+    assert body["hit_rate"] == 0.625
+    assert body["wilson_low"] < 0.625 < body["wilson_high"]

@@ -21,6 +21,7 @@ from app.api.picks import router as picks_router
 from app.api.subscribe import router as subscribe_router
 from app.api.models import router as models_router
 from app.api.rankings import router as rankings_router
+from app.api.signals import router as signals_router
 from app.api.theses import router as theses_router
 
 app = FastAPI(
@@ -51,6 +52,7 @@ app.include_router(subscribe_router)
 app.include_router(theses_router)
 app.include_router(rankings_router)
 app.include_router(models_router)
+app.include_router(signals_router)
 
 
 @app.get("/health")
