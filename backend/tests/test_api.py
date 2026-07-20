@@ -326,8 +326,13 @@ def test_stock_detail_endpoint(monkeypatch):
         {"issue_date": "2026-07-17", "direction": "BUY", "entry": 104.0,
          "target": 122.0, "stop": 93.0, "status": "open",
          "resolved_date": None, "realized_return": None}])
-    monkeypatch.setattr(stock_mod, "fetch_thesis_text",
-                        lambda cid, d: "The Signal ...")
+    # regression (500 in prod): fetch_thesis_text must delegate to the
+    # proven llm_theses fetcher, not a hand-rolled query with invented names
+    import app.api.theses as theses_mod
+    monkeypatch.setattr(theses_mod, "fetch_latest_thesis",
+                        lambda cid: {"date": "2026-07-17",
+                                     "thesis_text": "The Signal ...",
+                                     "model": "claude-sonnet-4-6"})
     r = client.get("/api/stock/sndk")   # lowercase must work
     assert r.status_code == 200
     body = r.json()

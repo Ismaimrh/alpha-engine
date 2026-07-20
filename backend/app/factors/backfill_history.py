@@ -69,7 +69,7 @@ def fetch_price_panel() -> pd.DataFrame:
     """date x company panel of momentum signals + close (for mcap approx)."""
     df = _fetch_all(
         "price_features",
-        "date,company_id,momentum_12_1,rsi_14,macd_hist,close",
+        "date,company_id,momentum_12_1,rsi_14,macd_hist,close,volume",
         "id",  # total order: unique key -> stable offset pagination
     )
     df["date"] = pd.to_datetime(df["date"]).dt.date
@@ -157,9 +157,17 @@ def backfill_factor_history(restart: bool = False,
     sectors = fetch_sectors()
     wide_all = (panel.pivot(index="date", columns="company_id", values="close")
                 .sort_index().astype(float))
+    volw_all = (panel.pivot(index="date", columns="company_id", values="volume")
+                .sort_index().astype(float))
     rets_all = wide_all.pct_change()
     ret21_all = wide_all / wide_all.shift(21) - 1
     vol63_all = rets_all.rolling(63, min_periods=40).std(ddof=1)
+    # Batch 3 (vectorized once over the panel)
+    high52w_all = wide_all / wide_all.rolling(252, min_periods=150).max()
+    mom61_all = wide_all.shift(21) / wide_all.shift(126) - 1
+    dollar_all = wide_all * volw_all
+    abnvol_all = (dollar_all.rolling(21, min_periods=15).mean()
+                  / dollar_all.rolling(126, min_periods=80).mean())
 
     latest_date = trading_dates[-1]
     closes_latest = (
@@ -197,6 +205,12 @@ def backfill_factor_history(restart: bool = False,
                               if d in ret21_all.index else None),
             realized_vol_63d=(vol63_all.loc[d]
                               if d in vol63_all.index else None),
+            high_52w_prox=(high52w_all.loc[d]
+                           if d in high52w_all.index else None),
+            momentum_6_1_raw=(mom61_all.loc[d]
+                              if d in mom61_all.index else None),
+            abn_volume_ratio=(abnvol_all.loc[d]
+                              if d in abnvol_all.index else None),
         )
         rows_written += write_factor_scores(scores, d)
         if n % 20 == 0:

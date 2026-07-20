@@ -181,6 +181,9 @@ def assemble_factor_scores(
     sectors: pd.Series | None = None,
     trailing_ret_21d: pd.Series | None = None,
     realized_vol_63d: pd.Series | None = None,
+    high_52w_prox: pd.Series | None = None,
+    momentum_6_1_raw: pd.Series | None = None,
+    abn_volume_ratio: pd.Series | None = None,
 ) -> pd.DataFrame:
     """Pure cross-sectional assembly. Index: company_id.
 
@@ -285,6 +288,27 @@ def assemble_factor_scores(
     else:
         out["low_vol"] = np.nan
 
+    # --- Research batch 3 candidates (pre-registered 2026-07-19) ---
+    # high_52w: close / 252d max — George-Hwang anchoring underreaction;
+    # registered sign POSITIVE.
+    if high_52w_prox is not None:
+        out["high_52w"] = zscore(high_52w_prox.reindex(universe))
+    else:
+        out["high_52w"] = np.nan
+    # momentum_6_1: 6mo-skip-1mo return — medium-horizon momentum;
+    # registered sign POSITIVE.
+    if momentum_6_1_raw is not None:
+        out["momentum_6_1"] = zscore(momentum_6_1_raw.reindex(universe))
+    else:
+        out["momentum_6_1"] = np.nan
+    # abnormal_volume: log(21d/126d dollar-volume) — visibility premium;
+    # registered sign POSITIVE (weakest prior of the three, stated upfront).
+    if abn_volume_ratio is not None:
+        ratio = abn_volume_ratio.reindex(universe).astype(float)
+        out["abnormal_volume"] = zscore(np.log(ratio.where(ratio > 0)))
+    else:
+        out["abnormal_volume"] = np.nan
+
     return out
 
 
@@ -306,8 +330,55 @@ def fetch_sectors() -> pd.Series:
 def fetch_trailing_stats(trading_date: date,
                          ret_days: int = 21,
                          vol_days: int = 63) -> tuple[pd.Series, pd.Series]:
-    """(trailing 21d return, realized 63d vol) per company as of
-    trading_date, from the stored close panel."""
+    """Back-compat wrapper: (21d return, 63d vol)."""
+    stats = fetch_trailing_stats_v2(trading_date)
+    return stats["ret21"], stats["vol63"]
+
+
+def fetch_trailing_stats_v2(trading_date: date) -> dict[str, pd.Series]:
+    """All trailing aux inputs in ONE panel fetch (~400 calendar days of
+    close+volume): ret21, vol63, high52w (close/252d max), mom_6_1
+    (close[-21]/close[-126]-1), abn_vol (21d/126d mean dollar volume)."""
+    from app.utils.db import supabase
+
+    start = (trading_date - timedelta(days=400)).isoformat()
+    rows, page = [], 0
+    while True:
+        resp = (supabase.table("price_features")
+                .select("date,company_id,close,volume")
+                .gte("date", start).lte("date", trading_date.isoformat())
+                .order("id").range(page * 1000, page * 1000 + 999).execute())
+        rows.extend(resp.data)
+        if len(resp.data) < 1000:
+            break
+        page += 1
+    df = pd.DataFrame(rows).drop_duplicates(subset=["date", "company_id"])
+    empty = {k: pd.Series(dtype=float) for k in
+             ("ret21", "vol63", "high52w", "mom_6_1", "abn_vol")}
+    if df.empty:
+        return empty
+    wide = (df.pivot(index="date", columns="company_id", values="close")
+            .sort_index().astype(float))
+    vol_w = (df.pivot(index="date", columns="company_id", values="volume")
+             .sort_index().astype(float))
+    rets = wide.pct_change()
+    n = len(wide)
+    out = dict(empty)
+    out["ret21"] = (wide.iloc[-1] / wide.iloc[-22] - 1 if n > 21
+                    else pd.Series(np.nan, index=wide.columns))
+    out["vol63"] = rets.tail(63).std(ddof=1)
+    out["high52w"] = wide.iloc[-1] / wide.tail(252).max()
+    out["mom_6_1"] = (wide.iloc[-22] / wide.iloc[-127] - 1 if n > 126
+                      else pd.Series(np.nan, index=wide.columns))
+    dollar = wide * vol_w
+    out["abn_vol"] = (dollar.tail(21).mean() / dollar.tail(126).mean()
+                      if n > 126 else pd.Series(np.nan, index=wide.columns))
+    return out
+
+
+def _fetch_trailing_stats_v1_unused(trading_date: date,
+                         ret_days: int = 21,
+                         vol_days: int = 63):
     from app.utils.db import supabase
 
     start = (trading_date - timedelta(days=int(vol_days * 1.6) + 10)).isoformat()
@@ -352,6 +423,27 @@ def write_factor_scores(scores: pd.DataFrame, score_date: date) -> int:
     return sent
 
 
+MIN_PANEL_TRADING_DAYS = 500  # splice sentinel: refuse to compute factors
+                              # on a short/partial price panel (review #9)
+
+
+def assert_price_panel_healthy(min_days: int = MIN_PANEL_TRADING_DAYS) -> None:
+    """Gate-1-style guard: the stored panel must span >= min_days trading
+    days, else a partial refetch may have spliced adjustment bases —
+    fail LOUD before writing factor scores on damaged data."""
+    from app.utils.db import supabase
+
+    total = (supabase.table("price_features")
+             .select("id", count="exact").limit(1).execute()).count or 0
+    est_days = total / 503
+    if est_days < min_days:
+        raise RuntimeError(
+            f"Price panel too short: ~{est_days:.0f} trading days "
+            f"(< {min_days}). A partial refetch may have spliced adjustment "
+            f"bases — run a FULL backfill_prices(years=2.1) before factors."
+        )
+
+
 def run_daily_factors(as_of: date | None = None) -> dict:
     """Step 6.1 entry: compute + write factor_scores for one date."""
     as_of = as_of or date.today()
@@ -367,11 +459,14 @@ def run_daily_factors(as_of: date | None = None) -> dict:
                                   max(LOOKBACK_DAYS, V2_LOOKBACK_DAYS))
     congress = _fetch_transactions("congress_transactions", as_of, LOOKBACK_DAYS)
 
+    assert_price_panel_healthy()
     sectors = fetch_sectors()
-    ret21, vol63 = fetch_trailing_stats(trading_date)
+    stats = fetch_trailing_stats_v2(trading_date)
     scores = assemble_factor_scores(
         as_of, prices, fundamentals, mcaps, insider, congress,
-        sectors=sectors, trailing_ret_21d=ret21, realized_vol_63d=vol63,
+        sectors=sectors, trailing_ret_21d=stats["ret21"],
+        realized_vol_63d=stats["vol63"], high_52w_prox=stats["high52w"],
+        momentum_6_1_raw=stats["mom_6_1"], abn_volume_ratio=stats["abn_vol"],
     )
     written = write_factor_scores(scores, trading_date)
     return {

@@ -119,12 +119,20 @@ def fetch_stock_cards(company_id: str) -> list[dict]:
 
 
 def fetch_thesis_text(company_id: str, pred_date: str) -> str | None:
-    from app.utils.db import supabase
+    """Delegates to the proven Step-11 fetcher (table llm_theses, column
+    thesis_text) — a hand-rolled duplicate here shipped a 500 by querying
+    a nonexistent 'theses' table. Reuse beats memory."""
+    from app.api.theses import fetch_latest_thesis
 
-    resp = (supabase.table("theses").select("thesis")
-            .eq("company_id", company_id).order("date", desc=True)
-            .limit(1).execute())
-    return resp.data[0]["thesis"] if resp.data else None
+    row = fetch_latest_thesis(company_id)
+    return row["thesis_text"] if row else None
+
+
+def _safe_thesis(cid: str, pred_date: str) -> str | None:
+    try:
+        return fetch_thesis_text(cid, pred_date)
+    except Exception:  # noqa: BLE001 — thesis is garnish, page must render
+        return None
 
 
 @router.get("/api/stock/{ticker}", response_model=StockResponse)
@@ -155,5 +163,5 @@ def get_stock(ticker: str):
         ) for r in fetch_factor_series(cid)],
         models=[ModelView(**r) for r in fetch_model_views(cid, pred_date)],
         cards=[StockCard(**r) for r in fetch_stock_cards(cid)],
-        thesis=fetch_thesis_text(cid, pred_date),
+        thesis=_safe_thesis(cid, pred_date),
     )

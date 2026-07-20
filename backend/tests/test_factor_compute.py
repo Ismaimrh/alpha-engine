@@ -71,6 +71,7 @@ def test_shape_and_columns(scores):
         "quality_composite", "insider_congress_composite",
         "insider_v2",  # candidate column (research cycle 1)
         "momentum_sector_rel", "reversal_21d", "low_vol",  # batch 2
+        "high_52w", "momentum_6_1", "abnormal_volume",  # batch 3
     }
 
 
@@ -266,3 +267,40 @@ def test_sector_relative_uses_global_fallback_for_tiny_sectors():
         scores["momentum_composite"].sort_index(),
         check_names=False,
     )
+
+
+# ------------------------------------------- research batch 3 candidates
+
+def _assemble_batch3():
+    sectors, ret21, vol63 = _batch2_inputs()
+    high52 = pd.Series({"co-momo": 0.99, "co-value": 0.80,
+                        "co-insider": 0.60, "co-filtered": 0.90})
+    mom61 = pd.Series({"co-momo": 0.25, "co-value": 0.02,
+                       "co-insider": -0.10, "co-filtered": 0.05})
+    abnvol = pd.Series({"co-momo": 2.0, "co-value": 1.0,
+                        "co-insider": 0.5, "co-filtered": -1.0})  # bad ratio
+    return assemble_factor_scores(
+        AS_OF, _price_signals(), _fundamentals(), _mcaps(), _insider(),
+        pd.DataFrame(), sectors=sectors, trailing_ret_21d=ret21,
+        realized_vol_63d=vol63, high_52w_prox=high52,
+        momentum_6_1_raw=mom61, abn_volume_ratio=abnvol,
+    )
+
+
+def test_batch3_columns_and_ordering():
+    s = _assemble_batch3()
+    assert s["high_52w"].idxmax() == "co-momo"       # nearest its high
+    assert s["high_52w"].idxmin() == "co-insider"
+    assert s["momentum_6_1"].idxmax() == "co-momo"
+    # abnormal_volume: log of ratio; non-positive ratio -> NaN, not -inf
+    assert s["abnormal_volume"].idxmax() == "co-momo"
+    assert np.isnan(s.loc["co-filtered", "abnormal_volume"])
+
+
+def test_batch3_none_inputs_degrade():
+    bare = assemble_factor_scores(
+        AS_OF, _price_signals(), _fundamentals(), _mcaps(), _insider(),
+        pd.DataFrame(),
+    )
+    for col in ("high_52w", "momentum_6_1", "abnormal_volume"):
+        assert bare[col].isna().all()
