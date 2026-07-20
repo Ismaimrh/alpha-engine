@@ -37,7 +37,8 @@ from app.ml.train import (  # noqa: E402
 
 COMPOSITES = ["momentum_composite", "valuation_composite",
               "insider_congress_composite", "insider_v2",
-              "momentum_sector_rel", "reversal_21d", "low_vol"]
+              "momentum_sector_rel", "reversal_21d", "low_vol",
+              "momentum_6_1", "abnormal_volume"]
 
 
 def _oos_ic(frame: pd.DataFrame, col: str) -> pd.Series:

@@ -117,7 +117,8 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
     prices = fetch_price_panel()
     composites = ["momentum_composite", "valuation_composite",
                   "insider_congress_composite", "insider_v2",
-                  "momentum_sector_rel", "reversal_21d", "low_vol"]
+                  "momentum_sector_rel", "reversal_21d", "low_vol",
+                  "momentum_6_1", "abnormal_volume"]
     scores = _fetch_all("factor_scores",
                         "id,date,company_id," + ",".join(composites), "id")
     scores["date"] = pd.to_datetime(scores["date"]).dt.date

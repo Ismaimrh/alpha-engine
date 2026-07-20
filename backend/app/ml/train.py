@@ -44,6 +44,10 @@ FEATURES = [
     "momentum_12_1", "rsi_14", "macd_signal",
     "momentum_composite", "valuation_composite", "insider_congress_composite",
     "momentum_sector_rel",  # Gate 2 PASS both horizons (0.0317/0.0392)
+    "momentum_6_1",     # 63d IC 0.0567/t=7.0 (strongest 63d signal measured);
+                        # 21d dead (t=0.19) — horizon-structure finding, S2 lead
+    "abnormal_volume",  # 63d near-miss 0.0172/t=4.1 -> features per |t|>=3 rule
+                        # (high_52w REJECTED: max |t|=2.5 < 3 — rule cuts both ways)
     "reversal_21d", "low_vol",  # wrong-signed but |t|>=3: composite NO
                    # (sign-flip = data snooping), ensemble YES (GBM is
                    # sign-agnostic; predictive content is what qualifies)
