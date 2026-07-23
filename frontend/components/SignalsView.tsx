@@ -247,7 +247,11 @@ export default function SignalsView() {
               <div key={h} className="mb-4">
                 <div className="label-2xs mb-2">
                   {h === "21" ? "Swing · 21d" : `Position · ${h}d`}{" "}
-                  <span className="text-muted">({cards.length})</span>
+                  <span className="text-muted">
+                    {(q.data.open_totals?.[h] ?? cards.length) > cards.length
+                      ? `(top ${cards.length} by conviction of ${q.data.open_totals[h]} open — all count in the hit rate)`
+                      : `(${cards.length})`}
+                  </span>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
                   {cards.map((c) => (

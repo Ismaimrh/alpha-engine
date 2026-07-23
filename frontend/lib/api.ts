@@ -152,6 +152,8 @@ export interface SignalCardT {
 export interface SignalsResponse {
   open_cards: SignalCardT[];
   by_horizon: Record<string, SignalCardT[]>;
+  open_totals: Record<string, number>;
+  display_cap: number;
   note: string;
 }
 

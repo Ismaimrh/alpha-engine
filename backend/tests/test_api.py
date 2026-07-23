@@ -266,11 +266,12 @@ def _card_row(ticker, status, direction="BUY", ret=None):
 
 def test_signals_and_ledger_endpoints(monkeypatch):
     import app.api.signals as sig_mod
-    monkeypatch.setattr(sig_mod, "fetch_cards",
-                        lambda st, o, l: ([_card_row("SNDK", "open")], 1))
+    monkeypatch.setattr(sig_mod, "fetch_open_rows",
+                        lambda: [_card_row("SNDK", "open")])
     r = client.get("/api/signals")
     assert r.status_code == 200
     assert r.json()["open_cards"][0]["ticker"] == "SNDK"
+    assert r.json()["open_totals"]["21"] == 1
     assert "close-touch" in r.json()["note"]
 
     monkeypatch.setattr(sig_mod, "fetch_cards",
@@ -343,3 +344,24 @@ def test_stock_detail_endpoint(monkeypatch):
 
     monkeypatch.setattr(stock_mod, "fetch_company", lambda t: None)
     assert client.get("/api/stock/NOPE").status_code == 404
+
+
+def test_signals_display_cap_ranks_by_conviction(monkeypatch):
+    """The 63d stream issues ~4x the champion's cards; the tab caps DISPLAY
+    by |alpha| while totals stay truthful and every card still counts."""
+    import app.api.signals as sig_mod
+
+    rows = [{**_card_row(f"T{i}", "open"), "horizon_days": 63,
+             "alpha_score": 1.0 + i / 100} for i in range(60)]
+    rows.append({**_card_row("LOUD", "open"), "horizon_days": 63,
+                 "alpha_score": 9.9})
+    rows += [{**_card_row(f"S{i}", "open"), "horizon_days": 21,
+              "alpha_score": 1.5} for i in range(3)]
+    monkeypatch.setattr(sig_mod, "fetch_open_rows", lambda: rows)
+    body = client.get("/api/signals").json()
+    assert body["open_totals"]["63"] == 61        # full count, not capped
+    assert body["open_totals"]["21"] == 3
+    assert len(body["by_horizon"]["63"]) == body["display_cap"]
+    assert body["by_horizon"]["63"][0]["ticker"] == "LOUD"   # conviction rank
+    assert len(body["by_horizon"]["21"]) == 3     # under cap: all shown
+    assert "count in the hit rate" in body["note"]

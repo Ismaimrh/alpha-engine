@@ -10,6 +10,13 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 MIN_N_FOR_DISPLAY = 30  # spec D4
+# Display cap per horizon. The 63d stream issues ~4x the champion's cards
+# (momentum_6_1's z-distribution is not compressed by the SNDK outlier),
+# so open 63d cards reach ~3,400 at steady state. This caps what the TAB
+# SHOWS, ranked by conviction — every issued card still resolves and still
+# counts in the hit rate. Showing a subset while scoring all of them is the
+# only honest direction for a cap to point.
+DISPLAY_CAP_PER_HORIZON = 24
 
 # Pre-registered success bars = empirical null + 5pp (spec v1.2 Appendix A,
 # measured 2026-07-19). Wilson lower bound must exceed these at N>=30.
@@ -38,10 +45,14 @@ class SignalCard(BaseModel):
 
 
 class SignalsResponse(BaseModel):
-    open_cards: list[SignalCard]                 # all, for back-compat
+    open_cards: list[SignalCard]                 # displayed set, back-compat
     by_horizon: dict[str, list[SignalCard]] = {}  # "21"/"63" -> cards (D7)
+    open_totals: dict[str, int] = {}   # FULL open counts per horizon
+    display_cap: int = DISPLAY_CAP_PER_HORIZON
     note: str = ("Resolution uses daily closes (close-touch rule) — intraday "
-                 "touches do not trigger. Horizons are reported separately. "
+                 "touches do not trigger. Horizons are reported separately; the tab "
+                 "shows the highest-conviction open cards per horizon while "
+                 "ALL issued cards resolve and count in the hit rate. "
                  "See methodology.")
 
 
@@ -90,6 +101,23 @@ class HitRateResponse(BaseModel):
                  "Displayed only once N >= 30 resolved (pre-registered).")
 
 
+def fetch_open_rows() -> list[dict]:
+    """ALL open cards (paginated, not capped) — the cap is applied to the
+    display slice, never to the fetch, so totals stay truthful."""
+    from app.factors.backfill_history import _fetch_all
+
+    df = _fetch_all(
+        "signal_cards",
+        "id,ticker,issue_date,direction,alpha_score,entry,target,stop,"
+        "sigma_21,horizon_days,status,resolved_date,resolved_close,"
+        "realized_return",
+        "id",
+    )
+    if df.empty:
+        return []
+    return df.loc[df["status"] == "open"].to_dict("records")
+
+
 def fetch_cards(status_filter: list[str] | None, offset: int, limit: int):
     from app.utils.db import supabase
 
@@ -103,12 +131,18 @@ def fetch_cards(status_filter: list[str] | None, offset: int, limit: int):
 
 @router.get("/api/signals", response_model=SignalsResponse)
 def get_signals():
-    rows, _ = fetch_cards(["open"], 0, 500)
-    cards = [SignalCard(**_shape(r)) for r in rows]
+    rows = fetch_open_rows()
+    totals: dict[str, int] = {}
     by_h: dict[str, list[SignalCard]] = {}
-    for c in cards:
-        by_h.setdefault(str(c.horizon_days), []).append(c)
-    return SignalsResponse(open_cards=cards, by_horizon=by_h)
+    for h in sorted({int(r["horizon_days"]) for r in rows}):
+        hrows = [r for r in rows if int(r["horizon_days"]) == h]
+        totals[str(h)] = len(hrows)
+        hrows.sort(key=lambda r: abs(float(r["alpha_score"])), reverse=True)
+        by_h[str(h)] = [SignalCard(**_shape(r))
+                        for r in hrows[:DISPLAY_CAP_PER_HORIZON]]
+    flat = [c for cards in by_h.values() for c in cards]
+    return SignalsResponse(open_cards=flat, by_horizon=by_h,
+                           open_totals=totals)
 
 
 @router.get("/api/signals/ledger", response_model=LedgerResponse)
