@@ -112,3 +112,36 @@ def test_d3d_terminated_series_resolves_at_last_close():
     assert out2["realized_return"] == pytest.approx(0.02, rel=1e-6)
     # same stub NOT terminated: stays open (regression guard)
     assert resolve_card_path("BUY", 100, 110, 95, stub, HORIZON_DAYS) is None
+
+
+def test_63d_envelope_wider_than_21d():
+    """S2: same name, same vol — the 63d envelope must be sqrt(3)x wider."""
+    alpha = pd.Series({"hi": 2.5})
+    closes = pd.Series({"hi": 100.0})
+    vol = pd.Series({"hi": 0.02})
+    tickers = pd.Series({"hi": "HI"})
+    c21 = build_cards(ISSUE, alpha, closes, vol, tickers, EXPIRES, "m21",
+                      horizon_days=21)[0]
+    c63 = build_cards(ISSUE, alpha, closes, vol, tickers, EXPIRES, "m63",
+                      horizon_days=63)[0]
+    assert c63["horizon_days"] == 63
+    width21 = c21["target"] - c21["stop"]
+    width63 = c63["target"] - c63["stop"]
+    assert width63 / width21 == pytest.approx(np.sqrt(3), rel=1e-3)
+
+
+def test_horizon_by_model_map_resolves_differently():
+    from app.backtest.outcomes import HORIZON_BY_MODEL, compute_outcomes
+
+    assert HORIZON_BY_MODEL["cand-mom61-63d-v1"] == 63
+    dates = list(pd.bdate_range("2026-01-01", periods=70).date)
+    closes = pd.DataFrame([{"date": d, "company_id": "c1", "close": 100 + i}
+                           for i, d in enumerate(dates)])
+    preds = pd.DataFrame([{"date": dates[0], "company_id": "c1",
+                           "model_version": "m", "alpha_score": 1.0,
+                           "predicted_return_30d": 0.01}])
+    out21 = compute_outcomes(preds, closes, horizon=21)
+    out63 = compute_outcomes(preds, closes, horizon=63)
+    assert out21.iloc[0]["resolved_date"] == dates[21]
+    assert out63.iloc[0]["resolved_date"] == dates[63]
+    assert out63.iloc[0]["realized_return"] > out21.iloc[0]["realized_return"]

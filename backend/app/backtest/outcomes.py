@@ -15,7 +15,12 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-HORIZON = 21  # trading days — matches the model target and Gate 2/3
+HORIZON = 21  # default: matches the 21d model target and Gate 2/3
+# S2 (spec v1.1/D7): models resolve at THEIR OWN horizon. Anything not in
+# the map resolves at the 21d default — existing streams unaffected.
+HORIZON_BY_MODEL: dict[str, int] = {
+    "cand-mom61-63d-v1": 63,
+}
 
 
 def compute_outcomes(
@@ -130,7 +135,9 @@ def promotion_verdict(
 # ------------------------------------------------------------------ DB layer
 
 def resolve_outcomes(horizon: int = HORIZON) -> dict:
-    """Fetch, resolve, upsert. Idempotent via the unique key."""
+    """Fetch, resolve, upsert. Idempotent via the unique key.
+    Horizon-aware (S2): each model's predictions resolve at the horizon in
+    HORIZON_BY_MODEL (default = the `horizon` arg, 21d)."""
     from app.factors.backfill_history import _fetch_all
     from app.utils.db import supabase
 
@@ -149,7 +156,13 @@ def resolve_outcomes(horizon: int = HORIZON) -> dict:
     closes["date"] = pd.to_datetime(closes["date"]).dt.date
     closes = closes.drop_duplicates(subset=["date", "company_id"])
 
-    outcomes = compute_outcomes(preds, closes, horizon=horizon)
+    preds["_h"] = preds["model_version"].map(
+        lambda m: HORIZON_BY_MODEL.get(m, horizon))
+    outcome_frames = [
+        compute_outcomes(group.drop(columns=["_h"]), closes, horizon=h)
+        for h, group in preds.groupby("_h")
+    ]
+    outcomes = pd.concat(outcome_frames, ignore_index=True)
     if outcomes.empty:
         latest_pred = preds["date"].max()
         latest_price = closes["date"].max()

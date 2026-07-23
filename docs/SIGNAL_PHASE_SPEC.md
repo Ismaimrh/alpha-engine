@@ -197,5 +197,24 @@ Roadmap items from the review (streak line, 5d stream, event triggers,
 multi-card grouping, backtested "what-would-have-been" page clearly labeled
 BACKTESTED) are acknowledged and parked in the backlog, not this phase.
 
-## Appendix A — null hit-rate calibration (TO FILL after first run)
-    [paste output of: python scripts/calibrate_null_hitrate.py --n 10000]
+## Appendix A — null hit-rate calibration (MEASURED 2026-07-19, LOCKED)
+Panel 547 dates x 503 names, 10,000 null cards per horizon, seed 42,
+random-direction cards through the production resolver:
+
+    21d  BUY   null 0.3721  (631 hit / 1065 stop / 3229 expired)
+    21d  AVOID null 0.2630  (515 hit / 1443 stop / 3117 expired)
+    63d  BUY   null 0.4099  (878 hit / 1264 stop / 2818 expired)
+    63d  AVOID null 0.2303  (507 hit / 1694 stop / 2839 expired)
+
+Notes: ~65% of null cards EXPIRE (discrete close-touch barriers are hard
+to reach) — both the original 40% arithmetic estimate and the review's
+44-47% GBM estimate were wrong; measurement was the only defensible path.
+
+**PRE-REGISTERED SUCCESS BARS (null + 5pp), per direction and horizon:**
+
+    21d BUY 42.2% | 21d AVOID 31.3% | 63d BUY 46.0% | 63d AVOID 28.0%
+
+Wilson CI lower bound must exceed the bar at N>=30 per cell. Ledger
+before-digest for Gate S2 #3: 4caf9ed68b69da2f8e8e7c2a7a3809e0
+8077085b806dd8ebc352229643745029 (5 rows, 0 resolved, 2026-07-19).
+S2 (v1.1) status: **APPROVED** with these bars.

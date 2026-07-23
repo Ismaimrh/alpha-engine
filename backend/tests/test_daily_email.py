@@ -74,12 +74,13 @@ def test_winsorized_predicted_return_rank_invariant():
 
 def test_email_renders_signal_cards_section():
     cards = [{"ticker": "SNDK", "direction": "BUY", "entry": 100.0,
-              "target": 118.5, "stop": 91.2},
+              "target": 118.5, "stop": 91.2, "horizon_days": 21},
              {"ticker": "XYZ", "direction": "AVOID", "entry": 50.0,
-              "target": 55.0, "stop": 47.0}]
+              "target": 55.0, "stop": 47.0, "horizon_days": 63}]
     _, html = render_email("2026-07-17", PICKS, "http://api", cards=cards)
     assert "NEW SIGNAL CARDS" in html
     assert "target 118.50" in html and "stop 91.20" in html
-    # no cards -> section absent entirely
+    assert "SWING · 21d" in html and "POSITION · 63d" in html  # split labels
+    assert "not a short" in html
     _, html2 = render_email("2026-07-17", PICKS, "http://api", cards=[])
     assert "NEW SIGNAL CARDS" not in html2

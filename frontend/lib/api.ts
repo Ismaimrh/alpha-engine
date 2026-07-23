@@ -151,6 +151,7 @@ export interface SignalCardT {
 
 export interface SignalsResponse {
   open_cards: SignalCardT[];
+  by_horizon: Record<string, SignalCardT[]>;
   note: string;
 }
 
@@ -159,6 +160,23 @@ export interface LedgerResponse {
   total: number;
   offset: number;
   limit: number;
+}
+
+export interface DirectionStats {
+  state: string;
+  n_resolved: number;
+  n_hit: number;
+  n_stop: number;
+  n_expired: number;
+  hit_rate: number | null;
+  wilson_low: number | null;
+  wilson_high: number | null;
+}
+
+export interface HorizonHitRate {
+  horizon_days: number;
+  by_direction: Record<string, DirectionStats>;
+  null_bars: Record<string, number>;
 }
 
 export interface HitRateResponse {
@@ -171,6 +189,8 @@ export interface HitRateResponse {
   wilson_low: number | null;
   wilson_high: number | null;
   avg_realized_return: number | null;
+  by_direction: Record<string, DirectionStats>;
+  by_horizon: HorizonHitRate[];
   note: string;
 }
 

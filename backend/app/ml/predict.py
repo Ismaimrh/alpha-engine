@@ -34,6 +34,7 @@ from app.ml.train import MODEL_VERSION as CHALLENGER_VERSION
 from app.ml.train import FEATURES, build_dataset, train_final_model
 
 CHAMPION_VERSION = "champion-momentum-v1"
+MOM61_63D_VERSION = "cand-mom61-63d-v1"  # S2: 63d position stream (spec v1.1)
 SECTOR_CANDIDATE_VERSION = "cand-sector-momentum-v1"  # Gate 2 pass
 # (2026-07-16: sector_rel beat raw momentum IC at both horizons; per
 # governance it is NOT hot-swapped in — it runs as a tracked model and
@@ -150,6 +151,21 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
         SECTOR_CANDIDATE_VERSION, top_n,
     )
 
+    # S2 63d position stream (spec v1.1, approved 2026-07-19): signal =
+    # momentum_6_1 z exactly as gate-measured (63d IC 0.0567/t=7.0);
+    # calibrated on ITS OWN horizon via a 63d-target dataset. The stored
+    # predicted_return_30d column carries the 63d expected excess for this
+    # stream (column name is historical; horizon lives in HORIZON_BY_MODEL).
+    mom61_alpha = today_frame["momentum_6_1"].astype(float)
+    dataset63 = build_dataset(features, prices[["date", "company_id", "close"]],
+                              horizon=63)
+    slope63 = calibrate_slope(dataset63, score_col="momentum_6_1")
+    mom61_rows = build_prediction_rows(
+        latest, mom61_alpha,
+        slope63 * mom61_alpha.clip(-ALPHA_CLIP, ALPHA_CLIP),
+        MOM61_63D_VERSION, top_n,
+    )
+
     # Challenger
     model = train_final_model(dataset)
     chall_pred = pd.Series(
@@ -168,7 +184,7 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
     )
 
     written = 0
-    for rows in (champ_rows, sect_rows, chall_rows):
+    for rows in (champ_rows, sect_rows, mom61_rows, chall_rows):
         for i in range(0, len(rows), 500):
             supabase.table("predictions").upsert(
                 rows[i : i + 500],
@@ -182,6 +198,7 @@ def run_daily_predictions(top_n: int = TOP_N) -> dict:
         "date": latest.isoformat(),
         "champion_rows": len(champ_rows),
         "sector_candidate_rows": len(sect_rows),
+        "mom61_63d_rows": len(mom61_rows),
         "challenger_rows": len(chall_rows),
         "rows_written": written,
         "calibration_slope": round(slope, 6),

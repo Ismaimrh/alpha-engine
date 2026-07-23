@@ -13,40 +13,73 @@ import { cn } from "@/lib/utils";
 const fmt = (v: number) => v.toFixed(2);
 const pct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1)}%`;
 
+function DirCell({ label, s, bar }: {
+  label: string;
+  s: { state: string; hit_rate: number | null; wilson_low: number | null;
+       wilson_high: number | null; n_resolved: number; n_hit: number;
+       n_stop: number } | undefined;
+  bar: number | undefined;
+}) {
+  if (!s) return null;
+  const collecting = s.state === "collecting";
+  const beats = s.wilson_low != null && bar != null && s.wilson_low > bar;
+  return (
+    <div className="min-w-[9rem]">
+      <div className="label-2xs">
+        {label} {bar != null && <span className="text-muted">· bar {(bar * 100).toFixed(0)}%</span>}
+      </div>
+      {collecting ? (
+        <span className="font-mono text-xs text-warn">
+          {s.n_resolved}/30 collecting
+        </span>
+      ) : (
+        <>
+          <span className={cn("font-mono text-lg",
+            beats ? "text-gain" : "text-bright")}>
+            {((s.hit_rate ?? 0) * 100).toFixed(1)}%
+          </span>
+          <span className="ml-1.5 font-mono text-2xs text-muted">
+            CI {((s.wilson_low ?? 0) * 100).toFixed(0)}–
+            {((s.wilson_high ?? 0) * 100).toFixed(0)} · n={s.n_resolved}
+            {beats && <span className="text-gain"> ✓ beats null</span>}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function HitRateHeader() {
   const q = useQuery({ queryKey: ["hitrate"], queryFn: fetchHitRate });
   if (q.isPending || !q.data) return <div className="skeleton mb-4 h-16 w-full" />;
   const h = q.data;
+  const horizons = h.by_horizon?.length
+    ? h.by_horizon
+    : [];
   return (
     <div className="mb-4 border border-rule bg-panel px-4 py-3">
-      {h.state === "collecting" ? (
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
-          <span className="font-mono text-xs uppercase text-warn">
-            collecting track record
-          </span>
-          <span className="font-mono text-xs text-muted">
-            {h.n_resolved}/30 resolved cards before the hit rate is shown —
-            pre-registered rule, no early numbers
-          </span>
-        </div>
+      <div className="label-2xs mb-2">
+        Hit rate · close-touch · vs pre-registered no-alpha null
+      </div>
+      {horizons.length === 0 ? (
+        <span className="font-mono text-xs text-warn">
+          {h.n_resolved}/30 collecting — no early numbers
+        </span>
       ) : (
-        <div className="flex flex-wrap items-baseline gap-x-8 gap-y-1">
-          <div>
-            <div className="label-2xs">Hit rate (close-touch)</div>
-            <span className="font-mono text-2xl text-bright">
-              {((h.hit_rate ?? 0) * 100).toFixed(1)}%
-            </span>
-            <span className="ml-2 font-mono text-2xs text-muted">
-              95% CI {((h.wilson_low ?? 0) * 100).toFixed(0)}–
-              {((h.wilson_high ?? 0) * 100).toFixed(0)}% · n={h.n_resolved}
-            </span>
-          </div>
-          <div className="font-mono text-xs text-muted">
-            {h.n_hit} hit · {h.n_stop} stopped · {h.n_expired} expired
-            {h.avg_realized_return != null && (
-              <> · avg {pct(h.avg_realized_return)}</>
-            )}
-          </div>
+        <div className="space-y-3">
+          {horizons.map((hz) => (
+            <div key={hz.horizon_days}>
+              <div className="mb-1 font-mono text-2xs text-muted">
+                {hz.horizon_days === 21 ? "SWING · 21d" : `POSITION · ${hz.horizon_days}d`}
+              </div>
+              <div className="flex flex-wrap gap-x-10 gap-y-2">
+                <DirCell label="BUY" s={hz.by_direction.BUY}
+                  bar={hz.null_bars.BUY} />
+                <DirCell label="AVOID" s={hz.by_direction.AVOID}
+                  bar={hz.null_bars.AVOID} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -208,11 +241,21 @@ export default function SignalsView() {
             · entry = issue-day close; next-day fills differ (overnight gap
             risk is the reader&apos;s)
           </p>
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-            {q.data.open_cards.map((c) => (
-              <Card key={`${c.ticker}-${c.issue_date}`} c={c} />
+          {Object.entries(q.data.by_horizon ?? {})
+            .sort(([a], [b]) => Number(a) - Number(b))
+            .map(([h, cards]) => (
+              <div key={h} className="mb-4">
+                <div className="label-2xs mb-2">
+                  {h === "21" ? "Swing · 21d" : `Position · ${h}d`}{" "}
+                  <span className="text-muted">({cards.length})</span>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+                  {cards.map((c) => (
+                    <Card key={`${c.ticker}-${c.issue_date}-${c.horizon_days}`} c={c} />
+                  ))}
+                </div>
+              </div>
             ))}
-          </div>
         </>
       )}
       <div className="mt-6">

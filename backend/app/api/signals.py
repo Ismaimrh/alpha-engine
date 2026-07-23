@@ -11,6 +11,13 @@ from pydantic import BaseModel
 
 MIN_N_FOR_DISPLAY = 30  # spec D4
 
+# Pre-registered success bars = empirical null + 5pp (spec v1.2 Appendix A,
+# measured 2026-07-19). Wilson lower bound must exceed these at N>=30.
+NULL_BARS = {
+    21: {"BUY": 0.422, "AVOID": 0.313},
+    63: {"BUY": 0.460, "AVOID": 0.280},
+}
+
 router = APIRouter()
 
 
@@ -31,9 +38,11 @@ class SignalCard(BaseModel):
 
 
 class SignalsResponse(BaseModel):
-    open_cards: list[SignalCard]
+    open_cards: list[SignalCard]                 # all, for back-compat
+    by_horizon: dict[str, list[SignalCard]] = {}  # "21"/"63" -> cards (D7)
     note: str = ("Resolution uses daily closes (close-touch rule) — intraday "
-                 "touches do not trigger. See methodology.")
+                 "touches do not trigger. Horizons are reported separately. "
+                 "See methodology.")
 
 
 class LedgerResponse(BaseModel):
@@ -54,18 +63,28 @@ class DirectionStats(BaseModel):
     wilson_high: float | None
 
 
+class HorizonHitRate(BaseModel):
+    horizon_days: int
+    by_direction: dict[str, DirectionStats]
+    null_bars: dict[str, float]     # pre-registered null+5pp per direction
+
+
 class HitRateResponse(BaseModel):
-    state: str                      # "collecting" | "reporting"
-    n_resolved: int                 # hit + stop (expired excluded, D4)
+    state: str                      # overall collecting|reporting (21d BUY)
+    n_resolved: int
     n_hit: int
     n_stop: int
     n_expired: int
-    hit_rate: float | None          # None while collecting
+    hit_rate: float | None
     wilson_low: float | None
     wilson_high: float | None
     avg_realized_return: float | None
-    by_direction: dict[str, DirectionStats] = {}  # v1.2: BUY/AVOID nulls
-                                                  # differ ~2x — never pool
+    by_direction: dict[str, DirectionStats] = {}
+    by_horizon: list[HorizonHitRate] = []   # D7: per-horizon, per-direction
+    note: str = ("Hit rate = hits / (hits + stops), close-touch, expired "
+                 "excluded but listed. Shown at N>=30 (pre-registered). "
+                 "Bars are the empirical no-alpha null + 5pp, per direction "
+                 "and horizon — never pooled.")
     note: str = ("Hit rate = hits / (hits + stops), close-touch rule, "
                  "expired cards excluded but listed in the ledger. "
                  "Displayed only once N >= 30 resolved (pre-registered).")
@@ -84,8 +103,12 @@ def fetch_cards(status_filter: list[str] | None, offset: int, limit: int):
 
 @router.get("/api/signals", response_model=SignalsResponse)
 def get_signals():
-    rows, _ = fetch_cards(["open"], 0, 200)
-    return SignalsResponse(open_cards=[SignalCard(**_shape(r)) for r in rows])
+    rows, _ = fetch_cards(["open"], 0, 500)
+    cards = [SignalCard(**_shape(r)) for r in rows]
+    by_h: dict[str, list[SignalCard]] = {}
+    for c in cards:
+        by_h.setdefault(str(c.horizon_days), []).append(c)
+    return SignalsResponse(open_cards=cards, by_horizon=by_h)
 
 
 @router.get("/api/signals/ledger", response_model=LedgerResponse)
@@ -128,19 +151,29 @@ def get_hitrate():
     avg_ret = round(sum(rets) / len(rets), 6) if rets else None
     by_dir = {d: _direction_stats([r for r in rows if r["direction"] == d])
               for d in ("BUY", "AVOID")}
+    horizons = []
+    for h in sorted({int(r["horizon_days"]) for r in rows} | {21}):
+        hrows = [r for r in rows if int(r["horizon_days"]) == h]
+        horizons.append(HorizonHitRate(
+            horizon_days=h,
+            by_direction={d: _direction_stats(
+                [r for r in hrows if r["direction"] == d])
+                for d in ("BUY", "AVOID")},
+            null_bars=NULL_BARS.get(h, {}),
+        ))
     if n < MIN_N_FOR_DISPLAY:
         return HitRateResponse(state="collecting", n_resolved=n, n_hit=n_hit,
                                n_stop=n_stop, n_expired=n_exp, hit_rate=None,
                                wilson_low=None, wilson_high=None,
                                avg_realized_return=avg_ret,
-                               by_direction=by_dir)
+                               by_direction=by_dir, by_horizon=horizons)
     lo, hi = wilson_ci(n_hit, n)
     return HitRateResponse(state="reporting", n_resolved=n, n_hit=n_hit,
                            n_stop=n_stop, n_expired=n_exp,
                            hit_rate=round(n_hit / n, 4),
                            wilson_low=lo, wilson_high=hi,
                            avg_realized_return=avg_ret,
-                           by_direction=by_dir)
+                           by_direction=by_dir, by_horizon=horizons)
 
 
 def _shape(r: dict) -> dict:

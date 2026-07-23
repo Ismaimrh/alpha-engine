@@ -72,25 +72,34 @@ __CARDS__
 </div>"""
     cards_html = ""
     if cards:
-        card_rows = "".join(
-            f"<tr>"
-            f"<td style='padding:3px 10px;font-weight:600;"
-            f"color:{'#4ADE80' if c['direction'] == 'BUY' else '#F87171'}'>"
-            f"{c['direction']}</td>"
-            f"<td style='padding:3px 10px;font-weight:600'>{c['ticker']}</td>"
-            f"<td style='padding:3px 10px'>entry {c['entry']:.2f}</td>"
-            f"<td style='padding:3px 10px'>target {c['target']:.2f}</td>"
-            f"<td style='padding:3px 10px'>stop {c['stop']:.2f}</td>"
-            f"</tr>"
-            for c in cards
-        )
+        # split by horizon so 21d swing and 63d position never blur together
+        by_h = {}
+        for c in cards:
+            by_h.setdefault(c.get("horizon_days", 21), []).append(c)
+        sections = []
+        for h in sorted(by_h):
+            label = "SWING · 21d" if h == 21 else f"POSITION · {h}d"
+            rows_h = "".join(
+                f"<tr>"
+                f"<td style='padding:3px 10px;font-weight:600;"
+                f"color:{'#4ADE80' if c['direction'] == 'BUY' else '#F87171'}'>"
+                f"{c['direction']}</td>"
+                f"<td style='padding:3px 10px;font-weight:600'>{c['ticker']}</td>"
+                f"<td style='padding:3px 10px'>entry {c['entry']:.2f}</td>"
+                f"<td style='padding:3px 10px'>target {c['target']:.2f}</td>"
+                f"<td style='padding:3px 10px'>stop {c['stop']:.2f}</td>"
+                f"</tr>"
+                for c in by_h[h]
+            )
+            sections.append(
+                f"<p style='color:#7A8580;font-size:11px;margin:12px 0 2px'>"
+                f"{label}</p><table style='border-collapse:collapse;"
+                f"font-size:12px'>{rows_h}</table>")
         cards_html = (
             "<p style='color:#7A8580;font-size:12px;margin:16px 0 4px'>"
-            "NEW SIGNAL CARDS (21 trading days, close-touch rule; entry = "
-            "issue close — next-day fills differ, overnight gap risk is "
-            "yours; AVOID = underweight, not a short)</p>"
-            f"<table style='border-collapse:collapse;font-size:12px'>{card_rows}</table>"
-        )
+            "NEW SIGNAL CARDS (close-touch; entry = issue close, next-day "
+            "fills differ; AVOID = underweight, not a short)</p>"
+            + "".join(sections))
     html = html.replace("__CARDS__", cards_html)
     return subject, html
 
