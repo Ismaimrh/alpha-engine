@@ -32,7 +32,7 @@ from datetime import date, timedelta
 import numpy as np
 import pandas as pd
 
-from app.factors.cross_section import zscore
+from app.factors.cross_section import rank_normalize, robust_zscore, zscore
 from app.factors.insider_congressional.factors import (
     V2_LOOKBACK_DAYS,
     insider_buy_signal_v2,
@@ -208,8 +208,17 @@ def assemble_factor_scores(
         out["momentum_composite"] = momentum_composite_cross_section(
             price_signals.reindex(universe)
         )
+        # Scoring-scheme candidates (docs/ROBUST_Z_PREREG.md). Same inputs,
+        # same weights — only the cross-sectional scaler differs. Judged at
+        # Gate 2; the live composite above is untouched until one wins.
+        out["momentum_robust"] = momentum_composite_cross_section(
+            price_signals.reindex(universe), scorer=robust_zscore)
+        out["momentum_ranknorm"] = momentum_composite_cross_section(
+            price_signals.reindex(universe), scorer=rank_normalize)
     else:
         out["momentum_composite"] = np.nan
+        out["momentum_robust"] = np.nan
+        out["momentum_ranknorm"] = np.nan
 
     # --- Valuation (hard filters -> NaN outside investable set)
     if not fundamentals.empty:

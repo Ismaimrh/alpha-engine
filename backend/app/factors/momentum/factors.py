@@ -85,17 +85,25 @@ def momentum_composite(m12_1: float, rsi: float, macd: float) -> float:
     return float((vals[mask] * weights[mask]).sum() / weights[mask].sum())
 
 
-def momentum_composite_cross_section(signals: pd.DataFrame) -> pd.Series:
+def momentum_composite_cross_section(
+    signals: pd.DataFrame, scorer=None
+) -> pd.Series:
     """Composite for the whole universe on one date.
 
     `signals` columns: momentum_12_1, rsi_14, macd_signal (index = ticker).
-    Each column is z-scored cross-sectionally, then weighted per spec.
+    Each column is scored cross-sectionally, then weighted per spec.
+
+    `scorer` selects the normalization scheme (docs/ROBUST_Z_PREREG.md);
+    default is the incumbent plain z-score. Candidate schemes are computed
+    into SEPARATE columns and judged at Gate 2 — the live composite does
+    not change until a challenger wins the registered decision rule.
     """
+    score = scorer or zscore
     z = pd.DataFrame(
         {
-            "momentum_12_1": zscore(signals["momentum_12_1"]),
-            "rsi_14": zscore(signals["rsi_14"]),
-            "macd_signal": zscore(signals["macd_signal"]),
+            "momentum_12_1": score(signals["momentum_12_1"]),
+            "rsi_14": score(signals["rsi_14"]),
+            "macd_signal": score(signals["macd_signal"]),
         }
     )
     return z.apply(

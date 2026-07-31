@@ -28,6 +28,27 @@ def zscore(values: pd.Series) -> pd.Series:
     return (v - v.mean()) / std
 
 
+def robust_zscore(values: pd.Series) -> pd.Series:
+    """Median/MAD z-score (docs/ROBUST_Z_PREREG.md, scheme S-ROBUST).
+
+    (x - median) / (1.4826 * MAD). The 1.4826 constant makes MAD a
+    consistent estimator of sigma for Gaussian data, so a +/-1.0 threshold
+    keeps the meaning it has under the plain z-score — the scale simply
+    stops being hostage to one extreme name.
+
+    Degenerate MAD (>= half the names identical, e.g. a zero-inflated
+    signal) falls back to the plain z-score rather than dividing by zero;
+    NaNs stay NaN.
+    """
+    v = values.astype(float)
+    med = v.median()
+    mad = (v - med).abs().median()
+    scale = 1.4826 * mad
+    if not np.isfinite(scale) or scale == 0:
+        return zscore(v)
+    return (v - med) / scale
+
+
 def rank_normalize(values: pd.Series, higher_is_better: bool = True) -> pd.Series:
     """Map values to N(0,1) scores via percentile ranks (outlier-robust).
 

@@ -133,6 +133,19 @@ export default function Home() {
           significance. Expected-return figures are model-implied estimates
           (in-sample calibrated, capped at ±3σ), not live forecasts.
         </p>
+        <p className="mt-3 text-sm leading-relaxed text-body">
+          Signal cards are issued when a name&apos;s score crosses ±1.0, a
+          fixed threshold tested against quantile-based alternatives and
+          kept (the alternatives stabilised the daily count but gave up 43%
+          of the issued set&apos;s conviction to do it). One consequence is
+          disclosed rather than hidden: <strong>the number of cards issued
+          varies with how dispersed the cross-section is</strong> — quiet
+          days produce fewer recommendations, and the 63-day stream issues
+          more than the 21-day stream because a single signal is scaled
+          differently than a three-signal composite. The Signals tab shows
+          the highest-conviction cards per horizon; every issued card
+          resolves and counts in the hit rate.
+        </p>
         <p className="mt-3 border-l-2 border-rule pl-3 font-mono text-2xs">
           {picks.data?.disclaimer ??
             "Backtested signals, not financial advice. Past performance does not guarantee future results."}

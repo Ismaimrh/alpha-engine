@@ -41,7 +41,8 @@ from app.factors.backfill_history import _fetch_all  # noqa: E402
 FACTORS = ["momentum_composite", "valuation_composite",
            "insider_congress_composite", "insider_v2",
            "momentum_sector_rel", "reversal_21d", "low_vol",
-           "high_52w", "momentum_6_1", "abnormal_volume"]
+           "high_52w", "momentum_6_1", "abnormal_volume",
+           "momentum_robust", "momentum_ranknorm"]
 MIN_DAYS_FOR_VERDICT = 60
 IC_THRESHOLD = 0.02
 T_THRESHOLD = 2.0

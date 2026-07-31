@@ -72,6 +72,7 @@ def test_shape_and_columns(scores):
         "insider_v2",  # candidate column (research cycle 1)
         "momentum_sector_rel", "reversal_21d", "low_vol",  # batch 2
         "high_52w", "momentum_6_1", "abnormal_volume",  # batch 3
+        "momentum_robust", "momentum_ranknorm",  # scoring schemes
     }
 
 
@@ -304,3 +305,53 @@ def test_batch3_none_inputs_degrade():
     )
     for col in ("high_52w", "momentum_6_1", "abnormal_volume"):
         assert bare[col].isna().all()
+
+
+# ------------------------------- scoring-scheme candidates (pre-registered)
+
+def test_robust_zscore_resists_a_single_outlier():
+    from app.factors.cross_section import robust_zscore, zscore
+
+    base = pd.Series(np.linspace(-0.2, 0.2, 200))
+    spiked = pd.concat([base, pd.Series([47.0])], ignore_index=True)
+
+    plain_base = zscore(base).abs().ge(1.0).sum()
+    plain_spiked = zscore(spiked).abs().ge(1.0).sum()
+    rob_base = robust_zscore(base).abs().ge(1.0).sum()
+    rob_spiked = robust_zscore(spiked).abs().ge(1.0).sum()
+
+    # the incumbent collapses when one name explodes; MAD barely moves
+    assert plain_spiked < plain_base / 4
+    assert rob_spiked >= rob_base - 1
+
+
+def test_robust_zscore_matches_plain_on_gaussian_data():
+    """1.4826*MAD is a consistent sigma estimator, so ±1.0 keeps meaning."""
+    from app.factors.cross_section import robust_zscore, zscore
+
+    rng = np.random.default_rng(5)
+    g = pd.Series(rng.normal(0, 1, 5000))
+    assert robust_zscore(g).std() == pytest.approx(zscore(g).std(), rel=0.05)
+
+
+def test_robust_zscore_degenerate_mad_falls_back():
+    from app.factors.cross_section import robust_zscore
+
+    zero_inflated = pd.Series([0.0] * 90 + [5.0] * 10)  # MAD == 0
+    out = robust_zscore(zero_inflated)
+    assert out.notna().all() and np.isfinite(out).all()
+
+
+def test_assemble_emits_scheme_candidates_without_touching_live():
+    scores = assemble_factor_scores(
+        AS_OF, _price_signals(), _fundamentals(), _mcaps(), _insider(),
+        pd.DataFrame(),
+    )
+    for col in ("momentum_robust", "momentum_ranknorm"):
+        assert col in scores.columns
+    # the live composite is byte-identical to the incumbent computation
+    from app.factors.momentum.factors import momentum_composite_cross_section
+    incumbent = momentum_composite_cross_section(
+        _price_signals().reindex(scores.index))
+    pd.testing.assert_series_equal(
+        scores["momentum_composite"], incumbent, check_names=False)
